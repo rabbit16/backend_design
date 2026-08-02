@@ -121,30 +121,54 @@ CREATE TABLE IF NOT EXISTS voice_recognize_jobs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='语音识别：POST /voice/recognize';
 
+-- 多轮对话：会话容器（每个会话唯一 session_id）
 CREATE TABLE IF NOT EXISTS qa_sessions (
-    id              CHAR(36)     NOT NULL,
-    user_id         CHAR(36)     NOT NULL,
-    lang            VARCHAR(8)   NOT NULL DEFAULT 'zh',
-    input_mode      VARCHAR(16)  NOT NULL DEFAULT 'voice' COMMENT 'voice | text',
-    question_text   TEXT         NOT NULL,
-    answer_text     TEXT         NOT NULL,
-    audio_media_id  CHAR(36)     NULL,
-    voice_job_id    CHAR(36)     NULL,
-    created_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    deleted_at      DATETIME(6)  NULL,
+    id                CHAR(36)     NOT NULL COMMENT '会话唯一ID',
+    user_id           CHAR(36)     NOT NULL,
+    lang              VARCHAR(8)   NOT NULL DEFAULT 'zh',
+    title             VARCHAR(128) NULL COMMENT '会话标题，默认取首问截断',
+    status            VARCHAR(16)  NOT NULL DEFAULT 'active' COMMENT 'active | closed',
+    message_count     INT          NOT NULL DEFAULT 0 COMMENT '消息条数（含用户与助手）',
+    last_message_at   DATETIME(6)  NULL COMMENT '最近一条消息时间，便于列表排序',
+    created_at        DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at        DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    deleted_at        DATETIME(6)  NULL,
     PRIMARY KEY (id),
-    KEY idx_qa_sessions_user (user_id, created_at),
+    KEY idx_qa_sessions_user (user_id, last_message_at),
     CONSTRAINT fk_qa_sessions_user FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT fk_qa_sessions_audio FOREIGN KEY (audio_media_id) REFERENCES media_files (id),
-    CONSTRAINT fk_qa_sessions_voice_job FOREIGN KEY (voice_job_id) REFERENCES voice_recognize_jobs (id),
     CONSTRAINT ck_qa_lang CHECK (lang IN ('zh', 'en')),
-    CONSTRAINT ck_qa_input_mode CHECK (input_mode IN ('voice', 'text'))
+    CONSTRAINT ck_qa_session_status CHECK (status IN ('active', 'closed'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='问询会话：POST/GET /qa/sessions';
+  COMMENT='问询多轮会话：一次老人连续追问共用一个 session_id';
+
+-- 多轮对话：会话内每条消息（用户问 / 助手答）
+CREATE TABLE IF NOT EXISTS qa_messages (
+    id              CHAR(36)     NOT NULL,
+    session_id      CHAR(36)     NOT NULL COMMENT '所属会话',
+    user_id         CHAR(36)     NOT NULL COMMENT '冗余用户ID，便于按人查询',
+    turn_index      INT          NOT NULL COMMENT '会话内序号，从1递增',
+    role            VARCHAR(16)  NOT NULL COMMENT 'user | assistant | system',
+    content         TEXT         NOT NULL COMMENT '文本内容',
+    input_mode      VARCHAR(16)  NULL COMMENT 'voice | text；仅 user 轮有意义',
+    audio_media_id  CHAR(36)     NULL COMMENT '本轮语音文件',
+    voice_job_id    CHAR(36)     NULL COMMENT '本轮语音识别任务',
+    created_at      DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_qa_messages_session_turn (session_id, turn_index),
+    KEY idx_qa_messages_session (session_id, turn_index),
+    KEY idx_qa_messages_user (user_id, created_at),
+    CONSTRAINT fk_qa_messages_session FOREIGN KEY (session_id) REFERENCES qa_sessions (id) ON DELETE CASCADE,
+    CONSTRAINT fk_qa_messages_user FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT fk_qa_messages_audio FOREIGN KEY (audio_media_id) REFERENCES media_files (id),
+    CONSTRAINT fk_qa_messages_voice_job FOREIGN KEY (voice_job_id) REFERENCES voice_recognize_jobs (id),
+    CONSTRAINT ck_qa_msg_role CHECK (role IN ('user', 'assistant', 'system')),
+    CONSTRAINT ck_qa_msg_input_mode CHECK (input_mode IS NULL OR input_mode IN ('voice', 'text'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='问询消息：按 turn_index 还原多轮上下文';
 
 CREATE TABLE IF NOT EXISTS qa_recommendations (
     id            CHAR(36)     NOT NULL,
-    session_id    CHAR(36)     NOT NULL,
+    session_id    CHAR(36)     NOT NULL COMMENT '基于整个会话上下文生成',
     user_id       CHAR(36)     NOT NULL,
     title         VARCHAR(128) NOT NULL,
     body          TEXT         NOT NULL,
@@ -375,7 +399,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- 页面 ↔ 表 对照
 -- =============================================================================
 -- 登录页: users, sms_codes, auth_sessions
--- 问询页: voice_recognize_jobs, qa_sessions, qa_recommendations, media_files
+-- 问询页: voice_recognize_jobs, qa_sessions, qa_messages, qa_recommendations, media_files
 -- 档案页: medical_archives, archive_ocr_jobs, health_summaries/items,
 --         health_reports/findings, report_glossaries, archive_shares/exports
 -- 个人中心: users, user_preferences, family_contacts, family_push_rules

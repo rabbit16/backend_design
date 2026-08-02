@@ -80,28 +80,41 @@
 
 ---
 
-### 4.3 首页问询（按住说话 / 文字）
+### 4.3 首页问询（按住说话 / 文字 · 多轮对话）
 
-典型流水线：
+**原先没有多轮**：旧设计把「一问一答」塞进 `qa_sessions` 一行。  
+**现设计**：`qa_sessions` = 会话容器（唯一 `session_id`），`qa_messages` = 每一轮发言。
 
 ```text
-上传音频 → media_files
-     ↓
-语音识别 → voice_recognize_jobs（recognized_text）
-     ↓
-问答     → qa_sessions（question_text / answer_text）
-     ↓
-就医建议 → qa_recommendations（与 session 1:1）
+首轮：POST /qa/sessions
+  → 创建 qa_sessions（拿到 session_id）
+  → 写入 qa_messages turn=1 user + turn=2 assistant
+
+追问：POST /qa/sessions/{session_id}/messages
+  → 按 turn_index 追加 user / assistant
+  → 推理时按 session_id 拉取全部 messages 作为上下文
+
+列表/回看：GET /qa/sessions、GET /qa/sessions/{id}
 ```
 
 | 表 | 何时写 | 读什么 |
 |----|--------|--------|
-| `media_files` | 收到音频文件时 | `kind=audio`，供回放/审计 |
-| `voice_recognize_jobs` | `POST /voice/recognize` | 文本、时长、成功/失败 |
-| `qa_sessions` | `POST /qa/sessions` | 一次完整问答；可挂 `voice_job_id` |
-| `qa_recommendations` | 点「医疗推荐」 | 标题、正文、风险等级、免责声明 |
+| `media_files` | 收到音频时 | `kind=audio` |
+| `voice_recognize_jobs` | `POST /voice/recognize` | 识别文本；可挂到本轮 `qa_messages.voice_job_id` |
+| `qa_sessions` | 开新对话时 | `id` 即 session_id；`title`/`message_count`/`last_message_at` 方便列表 |
+| `qa_messages` | 每一轮用户问、助手答 | `role` + `content` + `turn_index`；还原多轮历史 |
+| `qa_recommendations` | 点「医疗推荐」 | 基于**整段会话**上下文生成；与 session 1:1 |
 
-**文字模式**：可不写 `voice_recognize_jobs`，`input_mode=text`，直接写 `qa_sessions`。
+**文字模式**：`input_mode=text` 写在对应的 **user** 消息上，可不建 `voice_recognize_jobs`。
+
+**为何拆会话 / 消息？**
+
+| 需求 | 做法 |
+|------|------|
+| 每个会话唯一 ID | `qa_sessions.id` |
+| 保留老人追问记录 | 多行 `qa_messages`，不可覆盖历史 |
+| 给大模型喂上下文 | `WHERE session_id=? ORDER BY turn_index` |
+| 会话列表页 | 只扫 `qa_sessions`（看 title / last_message_at），不必扫全部消息 |
 
 ---
 
@@ -171,13 +184,14 @@ OCR 临时结果 → archive_ocr_jobs
 users
  ├─ 1:1  user_preferences / family_push_rules
  ├─ 1:N  auth_sessions / media_files / family_contacts
- ├─ 1:N  qa_sessions ──1:1── qa_recommendations
+ ├─ 1:N  qa_sessions ──1:N── qa_messages
+ │            └──1:1── qa_recommendations
  ├─ 1:N  medical_archives ──N── archive_shares → family_contacts
  │                      └──N── archive_exports → media_files
  ├─ 1:N  health_summaries ──N── health_summary_items
  └─ 1:N  health_reports ──N── health_report_findings
 
-media_files ← 被语音、OCR、报告 PDF、导出 PDF 多处引用
+media_files ← 被语音、OCR、报告 PDF、导出 PDF、消息音频 多处引用
 report_glossaries ← 全局配置，无 user_id
 audit_logs ← 可选，不参与主业务外键
 ```
@@ -195,12 +209,12 @@ ER 图（中文，可导入 draw.io）：[`er.mmd`](./er.mmd)
 3. 写 `auth_sessions`（refresh hash）  
 4. 返回 JWT + `UserProfile`
 
-### 语音问询 + 就医建议
+### 语音问询 + 多轮追问 + 就医建议
 
-1. 存音频 → `media_files`  
-2. 识别 → `voice_recognize_jobs`  
-3. 调模型写 `qa_sessions`  
-4. 可选生成 `qa_recommendations`
+1. 存音频 → `media_files`；识别 → `voice_recognize_jobs`  
+2. 首轮：建 `qa_sessions`，写 2 条 `qa_messages`（user / assistant）  
+3. 追问：同一 `session_id` 继续追加 `qa_messages`；加载历史再调模型  
+4. 可选：基于整段会话写/更新 `qa_recommendations`
 
 ### 就诊单 OCR 保存并推送
 
@@ -237,7 +251,7 @@ ER 图（中文，可导入 draw.io）：[`er.mmd`](./er.mmd)
 |------|-----|
 | 用户/会话/偏好 | `src/app/db/models/user.py` |
 | 媒体 | `media.py` |
-| 问询 | `qa.py` |
+| 问询 | `qa.py`（`QaSession` / `QaMessage` / `QaRecommendation` / `VoiceRecognizeJob`） |
 | 就诊档案/推送导出 | `archive.py` |
 | 健康总结/报告 | `health.py` |
 | 家属 | `family.py` |

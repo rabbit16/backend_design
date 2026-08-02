@@ -10,7 +10,7 @@ from app.db.models.health import (
     ReportGlossary,
 )
 from app.db.models.media import MediaFile
-from app.db.models.qa import QaRecommendation, QaSession, VoiceRecognizeJob
+from app.db.models.qa import QaMessage, QaRecommendation, QaSession, VoiceRecognizeJob
 from app.db.models.user import AuthSession, SmsCode, User, UserPreference
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "HealthSummaryItem",
     "MediaFile",
     "MedicalArchive",
+    "QaMessage",
     "QaRecommendation",
     "QaSession",
     "ReportGlossary",

@@ -13,7 +13,7 @@
 |------|----|----------------|
 | 用户认证 | `users` `sms_codes` `auth_sessions` `user_preferences` | 登录、退出、改密、个人资料 |
 | 媒体 | `media_files` | 语音、病历图、PDF |
-| 问询 | `voice_recognize_jobs` `qa_sessions` `qa_recommendations` | 语音/文字问询、就医推荐 |
+| 问询（多轮） | `voice_recognize_jobs` `qa_sessions` `qa_messages` `qa_recommendations` | 语音/文字问询、对话历史、就医推荐 |
 | 就诊档案 | `medical_archives` `archive_ocr_jobs` | 识别就诊单、保存档案 |
 | 健康总结 | `health_summaries` `health_summary_items` | 档案页「健康问题总结」 |
 | 健康报告 | `health_reports` `health_report_findings` `report_glossaries` | 「健康档案报告」列表/详情 |
@@ -31,6 +31,7 @@ users
  ├─ family_push_rules (1:1)
  ├─ media_files (1:N)
  ├─ qa_sessions (1:N)
+ │    ├─ qa_messages (1:N)          ← 多轮对话记录
  │    └─ qa_recommendations (1:1)
  ├─ medical_archives (1:N)
  │    ├─ archive_shares → family_contacts

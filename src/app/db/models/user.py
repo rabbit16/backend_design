@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from app.db.models.family import FamilyContact, FamilyPushRule
     from app.db.models.health import HealthReport, HealthSummary
     from app.db.models.media import MediaFile
-    from app.db.models.qa import QaRecommendation, QaSession, VoiceRecognizeJob
+    from app.db.models.qa import QaMessage, QaRecommendation, QaSession, VoiceRecognizeJob
 
 
 class User(TimestampMixin, SoftDeleteMixin, Base):
@@ -51,6 +51,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     media_files: Mapped[list[MediaFile]] = relationship(back_populates="user")
     voice_jobs: Mapped[list[VoiceRecognizeJob]] = relationship(back_populates="user")
     qa_sessions: Mapped[list[QaSession]] = relationship(back_populates="user")
+    qa_messages: Mapped[list[QaMessage]] = relationship(back_populates="user")
     qa_recommendations: Mapped[list[QaRecommendation]] = relationship(back_populates="user")
     medical_archives: Mapped[list[MedicalArchive]] = relationship(back_populates="user")
     archive_ocr_jobs: Mapped[list[ArchiveOcrJob]] = relationship(back_populates="user")

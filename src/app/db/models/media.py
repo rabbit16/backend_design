@@ -11,7 +11,7 @@ from app.utils.ids import new_uuid
 if TYPE_CHECKING:
     from app.db.models.archive import ArchiveExport, ArchiveOcrJob, MedicalArchive
     from app.db.models.health import HealthReport
-    from app.db.models.qa import QaSession, VoiceRecognizeJob
+    from app.db.models.qa import QaMessage, VoiceRecognizeJob
     from app.db.models.user import User
 
 
@@ -37,9 +37,9 @@ class MediaFile(CreatedAtMixin, SoftDeleteMixin, Base):
 
     user: Mapped[User] = relationship(back_populates="media_files")
     voice_jobs: Mapped[list[VoiceRecognizeJob]] = relationship(back_populates="media")
-    qa_sessions_as_audio: Mapped[list[QaSession]] = relationship(
+    qa_messages_as_audio: Mapped[list[QaMessage]] = relationship(
         back_populates="audio_media",
-        foreign_keys="QaSession.audio_media_id",
+        foreign_keys="QaMessage.audio_media_id",
     )
     medical_archives: Mapped[list[MedicalArchive]] = relationship(back_populates="image_media")
     archive_ocr_jobs: Mapped[list[ArchiveOcrJob]] = relationship(back_populates="image_media")

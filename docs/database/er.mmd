@@ -5,7 +5,8 @@ erDiagram
     users ||--o| family_push_rules : "推送规则1对1"
     users ||--o{ media_files : "媒体1对多"
     users ||--o{ voice_recognize_jobs : "语音识别1对多"
-    users ||--o{ qa_sessions : "问询1对多"
+    users ||--o{ qa_sessions : "问询会话1对多"
+    users ||--o{ qa_messages : "问询消息1对多"
     users ||--o{ qa_recommendations : "就医建议1对多"
     users ||--o{ medical_archives : "就诊档案1对多"
     users ||--o{ archive_ocr_jobs : "OCR任务1对多"
@@ -15,13 +16,14 @@ erDiagram
     users ||--o{ archive_exports : "导出任务1对多"
 
     media_files ||--o{ voice_recognize_jobs : "语音文件"
-    media_files ||--o{ qa_sessions : "问询音频"
+    media_files ||--o{ qa_messages : "消息音频"
     media_files ||--o{ medical_archives : "就诊单图片"
     media_files ||--o{ archive_ocr_jobs : "OCR图片"
     media_files ||--o{ health_reports : "报告PDF"
     media_files ||--o{ archive_exports : "导出PDF"
 
-    voice_recognize_jobs ||--o{ qa_sessions : "识别结果"
+    voice_recognize_jobs ||--o{ qa_messages : "识别结果"
+    qa_sessions ||--o{ qa_messages : "多轮消息"
     qa_sessions ||--o| qa_recommendations : "建议1对1"
 
     medical_archives ||--o{ archive_shares : "推送档案"
@@ -98,21 +100,34 @@ erDiagram
     }
 
     qa_sessions["问询会话 qa_sessions"] {
-        string id PK "主键"
+        string id PK "会话唯一session_id"
         string user_id FK "所属用户"
         string lang "问答语言"
-        string input_mode "voice或text"
-        string question_text "用户问题"
-        string answer_text "系统回答"
-        string audio_media_id FK "关联音频"
-        string voice_job_id FK "关联识别任务"
+        string title "会话标题取自首问"
+        string status "active或closed"
+        int message_count "消息条数"
+        datetime last_message_at "最近消息时间"
         datetime created_at "创建时间"
+        datetime updated_at "更新时间"
         datetime deleted_at "软删除"
+    }
+
+    qa_messages["问询消息 qa_messages"] {
+        string id PK "主键"
+        string session_id FK "所属会话"
+        string user_id FK "所属用户"
+        int turn_index UK "会话内序号从1递增"
+        string role "user或assistant或system"
+        string content "文本内容"
+        string input_mode "voice或text仅用户轮"
+        string audio_media_id FK "本轮语音"
+        string voice_job_id FK "本轮识别任务"
+        datetime created_at "创建时间"
     }
 
     qa_recommendations["就医建议 qa_recommendations"] {
         string id PK "主键"
-        string session_id FK,UK "对应问询会话唯一"
+        string session_id FK,UK "对应整段会话"
         string user_id FK "所属用户"
         string title "标题"
         string body "建议正文"

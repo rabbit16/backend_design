@@ -192,7 +192,10 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 2.3 语音与问答 QA
+### 2.3 语音与问答 QA（支持多轮对话）
+
+一次老人连续追问共用一个 **`session_id`**（即 `qa_sessions.id`）。  
+每轮用户问 / 助手答写入 `qa_messages`，按 `turn_index` 还原上下文。
 
 #### `POST /voice/recognize`（需登录，`multipart/form-data`）
 
@@ -211,13 +214,14 @@ Authorization: Bearer <access_token>
 
 #### `POST /qa/sessions`（需登录）
 
-创建一次问答会话。
+创建新会话，并写入首轮问答（也可只建空会话，看实现约定）。
 
 ```json
 {
   "question": "今天天气怎么样",
   "lang": "zh",
-  "audio_url": "可选，若已上传音频"
+  "input_mode": "voice",
+  "audio_url": "可选"
 }
 ```
 
@@ -225,31 +229,70 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "session_id": "qa_xxx",
-  "question_text": "今天天气怎么样",
-  "answer_text": "今天晴，气温 18～26℃……",
+  "session_id": "a1b2c3d4-....",
   "lang": "zh",
+  "title": "今天天气怎么样",
+  "status": "active",
+  "messages": [
+    {
+      "id": "...",
+      "turn_index": 1,
+      "role": "user",
+      "content": "今天天气怎么样",
+      "input_mode": "voice",
+      "created_at": "2026-07-29T04:01:00Z"
+    },
+    {
+      "id": "...",
+      "turn_index": 2,
+      "role": "assistant",
+      "content": "今天晴，气温 18～26℃……",
+      "created_at": "2026-07-29T04:01:01Z"
+    }
+  ],
   "created_at": "2026-07-29T04:01:00Z"
 }
 ```
 
 ---
 
+#### `POST /qa/sessions/{session_id}/messages`（需登录）
+
+在已有会话中追加一轮（多轮追问）。服务端应加载该会话历史消息作为模型上下文。
+
+```json
+{
+  "question": "那要穿什么衣服？",
+  "input_mode": "text",
+  "audio_url": "可选"
+}
+```
+
+响应：更新后的会话（含全部 `messages`），或仅返回本轮新增的 2 条消息 + `session_id`。
+
+---
+
+#### `GET /qa/sessions`（需登录）
+
+会话列表（按 `last_message_at` 倒序）。查询参数：`page`、`page_size`。
+
+---
+
 #### `GET /qa/sessions/{session_id}`（需登录）
 
-查询单次问答。
+查询整段多轮对话（含按 `turn_index` 排序的 `messages`）。
 
 ---
 
 #### `POST /qa/sessions/{session_id}/recommendations`（需登录）
 
-基于该次问答生成「就医建议」卡片（对应首页「医疗推荐」按钮）。
+基于**该会话全部上下文**生成「就医建议」卡片（对应首页「医疗推荐」按钮）。
 
 响应：
 
 ```json
 {
-  "session_id": "qa_xxx",
+  "session_id": "a1b2c3d4-....",
   "title": "就医建议",
   "body": "建议附近社区医院就诊……",
   "risk_level": "low",
@@ -489,8 +532,9 @@ app.add_middleware(
 |----------|----------|
 | 登录（验证码） | `POST /auth/sms/send`、`POST /auth/login/sms` |
 | 登录（密码） | `POST /auth/login/password` |
-| 首页按住说话 | `POST /voice/recognize` → `POST /qa/sessions` |
-| 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
+| 首页按住说话 | `POST /voice/recognize` → `POST /qa/sessions`（首轮）或 `POST /qa/sessions/{id}/messages`（追问） |
+| 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations`（基于整段会话） |
+| 对话历史 | `GET /qa/sessions`、`GET /qa/sessions/{id}` |
 | 档案 OCR | `POST /archives/ocr`、`POST /archives` |
 | 档案时间线 | `GET /archives`、`GET /archives/{id}` |
 | 推送子女 / 导出 | `POST /archives/{id}/share`、`GET /archives/{id}/export` |

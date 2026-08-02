@@ -3,11 +3,13 @@ from datetime import date
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import selectinload
 
 from app.db.base import Base
 from app.db.models import (
     FamilyContact,
     MedicalArchive,
+    QaMessage,
     QaRecommendation,
     QaSession,
     User,
@@ -47,15 +49,40 @@ async def test_user_relationships(session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_qa_and_archive_graph(session: AsyncSession) -> None:
+async def test_multi_turn_qa_session(session: AsyncSession) -> None:
     user = User(phone="13800138002")
-    qa = QaSession(
-        user=user,
-        lang="zh",
-        input_mode="text",
-        question_text="今天天气怎么样",
-        answer_text="晴，18～26℃",
+    qa = QaSession(user=user, lang="zh", title="今天天气怎么样", status="active")
+    qa.messages.extend(
+        [
+            QaMessage(
+                user=user,
+                turn_index=1,
+                role="user",
+                content="今天天气怎么样",
+                input_mode="voice",
+            ),
+            QaMessage(
+                user=user,
+                turn_index=2,
+                role="assistant",
+                content="今天晴，气温 18～26℃",
+            ),
+            QaMessage(
+                user=user,
+                turn_index=3,
+                role="user",
+                content="那要穿什么衣服？",
+                input_mode="text",
+            ),
+            QaMessage(
+                user=user,
+                turn_index=4,
+                role="assistant",
+                content="建议穿薄外套，早晚略凉。",
+            ),
+        ]
     )
+    qa.message_count = 4
     qa.recommendation = QaRecommendation(
         user=user,
         title="就医建议",
@@ -73,10 +100,17 @@ async def test_qa_and_archive_graph(session: AsyncSession) -> None:
     session.add_all([user, qa, archive])
     await session.commit()
 
-    loaded_qa = (await session.execute(select(QaSession))).scalar_one()
+    loaded_qa = (
+        await session.execute(
+            select(QaSession).options(selectinload(QaSession.messages), selectinload(QaSession.recommendation))
+        )
+    ).scalar_one()
+    assert loaded_qa.id  # 唯一会话 id
+    assert len(loaded_qa.messages) == 4
+    assert loaded_qa.messages[0].role == "user"
+    assert loaded_qa.messages[3].content.startswith("建议穿")
     assert loaded_qa.recommendation is not None
     assert loaded_qa.recommendation.risk_level == "low"
-    assert loaded_qa.user.phone == "13800138002"
 
     loaded_arc = (await session.execute(select(MedicalArchive))).scalar_one()
     assert loaded_arc.user_id == loaded_qa.user_id
