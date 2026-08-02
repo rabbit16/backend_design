@@ -23,6 +23,12 @@ class Settings(BaseSettings):
 
     ai_gateway_provider: str = "echo"
     ai_gateway_timeout_seconds: float = 60.0
+    # OpenAI 兼容接口（provider=openai 时生效；可指向 DeepSeek/vLLM/Ollama 等）
+    openai_api_base: str = "https://api.openai.com/v1"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    openai_temperature: float = 0.7
+    openai_max_tokens: int = 1024
 
     max_ws_connections: int = 10_000
 

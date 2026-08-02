@@ -8,7 +8,7 @@
 - HTTP 路由与 WebSocket 路由统一注册
 - 中间件统一注册：Request ID、访问日志、错误边界、CORS
 - 结构化日志，适合接入 ELK、Loki、OpenTelemetry
-- AI Gateway 抽象层，默认 echo 实现，可替换 OpenAI、Claude、本地模型或 RAG
+- AI Gateway 统一走 **OpenAI Chat Completions** 协议（`messages[]` / stream chunk），默认 `echo`，可切 `openai` 兼容上游（DeepSeek / vLLM / Ollama 等）
 - WebSocket 连接管理，支持连接注册、注销、单播、广播
 - SQLAlchemy async ORM + Alembic 迁移，一键生成并执行数据库迁移
 - async-first 设计，适合高并发 I/O 场景
@@ -136,9 +136,35 @@ curl -X POST http://localhost:8000/api/v1/tasks/demo \
 1. 在 `src/app/api/ws/` 下新增 router 文件。
 2. 在 `src/app/api/router.py` 的 `register_routes()` 中 include。
 
-## 替换 AI Gateway
+## 替换 AI Gateway（OpenAI 协议）
 
-实现 `src/app/gateways/base.py` 中的 `AIGateway` 协议，然后在 `src/app/gateways/registry.py` 根据配置返回你的实现。
+业务层只依赖 `AIGateway`：`chat_completions` / `chat_completions_stream`，入参/出参为 `src/app/schemas/openai_chat.py`（与 OpenAI `/v1/chat/completions` 对齐）。
+
+**本地开发（默认）**
+
+```env
+AI_GATEWAY_PROVIDER=echo
+```
+
+**切换任意 OpenAI 兼容模型**
+
+```env
+AI_GATEWAY_PROVIDER=openai
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+示例（DeepSeek）：
+
+```env
+AI_GATEWAY_PROVIDER=openai
+OPENAI_API_BASE=https://api.deepseek.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=deepseek-chat
+```
+
+新增供应商：实现 `AIGateway`，在 `src/app/gateways/providers.py` 注册即可；QA（`/qa/ask`）与 Chat 均走同一协议。
 
 ## 高并发扩展建议
 

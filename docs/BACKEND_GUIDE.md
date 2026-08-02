@@ -196,6 +196,39 @@ cp .env.example .env
 | `CORS_ORIGINS` | 跨域来源 JSON 列表 | `["*"]` |
 | `API_V1_PREFIX` | HTTP 前缀 | `/api/v1` |
 | `RATE_LIMIT_ENABLED` | 全局限流开关 | `true` |
+| `AI_GATEWAY_PROVIDER` | 大模型网关：`echo` / `reverse-echo` / `openai` | `echo` |
+| `OPENAI_API_BASE` | OpenAI 兼容 Base URL（仅 `openai`） | `https://api.openai.com/v1` |
+| `OPENAI_API_KEY` | API Key | 空 |
+| `OPENAI_MODEL` | 上游模型名 | `gpt-4o-mini` |
+
+### 4.2.1 切换大模型（OpenAI 协议）
+
+业务统一走 OpenAI Chat Completions：`messages[]` + 流式 `delta.content`。  
+适老化问答 `/qa/ask` 会把历史轮次拼成标准 messages，再调网关。
+
+本地默认：
+
+```env
+AI_GATEWAY_PROVIDER=echo
+```
+
+切真实模型（任意兼容 `/v1/chat/completions` 的服务）：
+
+```env
+AI_GATEWAY_PROVIDER=openai
+OPENAI_API_BASE=https://api.openai.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+DeepSeek 示例：
+
+```env
+AI_GATEWAY_PROVIDER=openai
+OPENAI_API_BASE=https://api.deepseek.com/v1
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=deepseek-chat
+```
 
 改数据库账号/库名时，只改 `DATABASE_URL`，例如：
 

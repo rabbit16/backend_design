@@ -221,7 +221,11 @@ Authorization: Bearer <access_token>
 服务端用 Redis（或本地内存回退）按用户缓存当前 `context_id`（即 `qa_sessions.id`）。  
 **固定 30 天过期**（自上下文创建起算）：期内继续提问**不会**刷新过期时间；到期后自动换新上下文。
 
-#### `POST /qa/ask`（需登录）——文字输入（推荐）
+#### `POST /qa/ask`（需登录）——文字输入（SSE 流式）
+
+`Content-Type: text/event-stream`
+
+请求：
 
 ```json
 {
@@ -237,19 +241,23 @@ Authorization: Bearer <access_token>
 | `lang` | `zh` \| `en` |
 | `new_context` | `true` 时强制新开上下文（如点「新问题」） |
 
-响应：
+事件顺序（每行 `data: {json}`，空行分隔）：
 
-```json
-{
-  "context_id": "a1b2c3d4-....",
-  "lang": "zh",
-  "question_text": "今天天气怎么样",
-  "answer_text": "今天晴，气温 18～26℃……",
-  "turn_index_user": 1,
-  "turn_index_assistant": 2,
-  "context_continued": false,
-  "created_at": "2026-07-29T04:01:00Z"
-}
+1. **meta** — 上下文信息（先返回，便于 UI 绑定）
+2. **token** — 回答增量，可多次：`{"type":"token","delta":"..."}`
+3. **done** — 完整结果（已落库）
+4. 失败时 **error**：`{"type":"error","code":"...","message":"..."}`
+
+示例：
+
+```text
+data: {"type":"meta","context_id":"...","context_continued":false,"lang":"zh","question_text":"今天天气怎么样","turn_index_user":1,"turn_index_assistant":2}
+
+data: {"type":"token","delta":"今天"}
+
+data: {"type":"token","delta":"晴朗"}
+
+data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天气怎么样","answer_text":"今天晴朗","turn_index_user":1,"turn_index_assistant":2,"context_continued":false,"created_at":"2026-07-29T04:01:00Z"}
 ```
 
 `context_continued=true` 表示沿用未过期的旧上下文（多轮追问）。

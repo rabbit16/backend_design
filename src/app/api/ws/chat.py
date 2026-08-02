@@ -18,15 +18,22 @@ async def chat_websocket(websocket: WebSocket, client_id: str, model: str = "ech
         await websocket.send_json({"type": "connected", "client_id": client_id})
         while True:
             try:
-                incoming = await receive_chat_message(websocket)
+                incoming_msg = await receive_chat_message(websocket)
             except ValidationError as exc:
                 await safe_send_error(websocket, "invalid_payload", validation_error_message(exc))
                 continue
 
-            request = ChatRequest(message=incoming.message, client_id=client_id, model=model, stream=True)
+            request = ChatRequest(
+                message=incoming_msg.message,
+                client_id=client_id,
+                model=model,
+                stream=True,
+            )
             await websocket.send_json({"type": "start"})
-            async for token in gateway.stream(request):
-                await websocket.send_json({"type": "token", "delta": token})
+            async for chunk in gateway.chat_completions_stream(request.to_openai()):
+                delta = chunk.delta_content
+                if delta:
+                    await websocket.send_json({"type": "token", "delta": delta})
             await websocket.send_json({"type": "done"})
     except WebSocketDisconnect:
         return

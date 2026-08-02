@@ -8,4 +8,4 @@ def test_list_models() -> None:
         response = client.get("/api/v1/chat/models")
 
     assert response.status_code == 200
-    assert response.json()["data"] == ["echo", "reverse-echo"]
+    assert response.json()["data"] == ["echo", "reverse-echo", "openai"]

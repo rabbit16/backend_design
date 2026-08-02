@@ -1,15 +1,22 @@
-from typing import Protocol, AsyncIterator
+from __future__ import annotations
 
-from app.schemas.chat import ChatRequest, ChatResponse
+from collections.abc import AsyncIterator
+from typing import Protocol
+
+from app.schemas.openai_chat import ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse
 
 
 class AIGateway(Protocol):
+    """OpenAI Chat Completions 兼容网关。"""
+
     provider: str
 
-    async def complete(self, request: ChatRequest) -> ChatResponse:
+    async def chat_completions(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         ...
 
-    async def stream(self, request: ChatRequest) -> AsyncIterator[str]:
+    def chat_completions_stream(
+        self, request: ChatCompletionRequest
+    ) -> AsyncIterator[ChatCompletionChunk]:
         ...
 
     async def close(self) -> None:

@@ -11,7 +11,12 @@ class ChatService:
         self.session = session
 
     async def complete(self, request: ChatRequest) -> ChatResponse:
-        response = await self.gateway.complete(request)
+        completion = await self.gateway.chat_completions(request.to_openai())
+        response = ChatResponse(
+            id=completion.id,
+            provider=completion.provider or getattr(self.gateway, "provider", "unknown"),
+            message=completion.content,
+        )
         if self.session and request.client_id:
             repo = ChatMessageRepository(self.session)
             await repo.add(client_id=request.client_id, role="user", content=request.message)
