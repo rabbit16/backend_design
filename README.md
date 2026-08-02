@@ -15,6 +15,8 @@
 
 ## 快速开始
 
+本地启动、迁移、改配置见：**[`docs/BACKEND_GUIDE.md`](docs/BACKEND_GUIDE.md)**。
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate

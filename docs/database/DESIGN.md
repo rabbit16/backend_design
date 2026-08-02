@@ -82,18 +82,26 @@
 
 ### 4.3 首页问询（按住说话 / 文字 · 多轮对话）
 
-**原先没有多轮**：旧设计把「一问一答」塞进 `qa_sessions` 一行。  
-**现设计**：`qa_sessions` = 会话容器（唯一 `session_id`），`qa_messages` = 每一轮发言。
+**适老化文字输入（推荐）**：前端只调 `POST /qa/ask`，**不传 session_id**。
+
+```text
+Redis key: qa:context:user:{user_id}  →  context_id(=qa_sessions.id)
+TTL: 默认 2592000 秒（30 天），自创建起固定过期；期内提问不续期
+
+流程：
+  1. 从 Redis 取未过期 context_id
+  2. 命中 → 加载 qa_sessions + qa_messages 作为上下文，追加本轮（不刷新 TTL）
+  3. 未命中/过期 → 新建 qa_sessions，写入 Redis（此时才设置 30 天 TTL），再对话
+  4. 落库 qa_messages（user / assistant）
+```
+
+`REDIS_ENABLED=false` 时用进程内存缓存（重启丢失，仅开发/单测）。
+
+**显式会话 API**（可选）：
 
 ```text
 首轮：POST /qa/sessions
-  → 创建 qa_sessions（拿到 session_id）
-  → 写入 qa_messages turn=1 user + turn=2 assistant
-
 追问：POST /qa/sessions/{session_id}/messages
-  → 按 turn_index 追加 user / assistant
-  → 推理时按 session_id 拉取全部 messages 作为上下文
-
 列表/回看：GET /qa/sessions、GET /qa/sessions/{id}
 ```
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,11 +18,12 @@ from app.schemas.auth import (
 )
 from app.security.jwt import create_token_pair, decode_token, revoke_session
 from app.security.password import hash_password, verify_password
-from app.services.sms_service import SmsService
+from app.services.sms_service import SmsPurpose, SmsService
 from app.utils.ids import new_user_id
 
 PHONE_PATTERN = re.compile(r"^1\d{10}$")
 MIN_PASSWORD_LENGTH = 6
+Lang = Literal["zh", "en"]
 
 
 def _validate_phone(phone: str) -> str:
@@ -73,14 +75,43 @@ class AuthService:
         self.users = UserRepository(session)
         self.sms = sms or SmsService()
 
-    async def send_sms(self, phone: str) -> SendSmsResponse:
+    async def send_sms(self, phone: str, purpose: SmsPurpose = "login") -> SendSmsResponse:
         phone = _validate_phone(phone)
-        expire_in = self.sms.send_code(phone)
+        expire_in = self.sms.send_code(phone, purpose)
         return SendSmsResponse(ok=True, expire_in=expire_in)
+
+    async def register(
+        self,
+        phone: str,
+        code: str,
+        password: str,
+        display_name: str | None = None,
+        preferred_lang: Lang = "zh",
+    ) -> LoginResponse:
+        phone = _validate_phone(phone)
+        # 文档约定：注册校验失败用 401
+        self.sms.verify_code(phone, code.strip(), purpose="register", status_code=401)
+
+        existing = await self.users.get_by_phone(phone)
+        if existing is not None and existing.deleted_at is None:
+            raise AppError("手机号已注册", code="phone_already_registered", status_code=409)
+
+        user = User(
+            id=new_user_id(),
+            phone=phone,
+            password_hash=hash_password(_validate_password(password)),
+            display_name=(display_name.strip() if display_name else None) or None,
+            preferred_lang=preferred_lang,
+            status="active",
+        )
+        await self.users.add(user)
+        await self.session.commit()
+        await self.session.refresh(user)
+        return _to_login_response(user)
 
     async def login_sms(self, phone: str, code: str, password: str | None = None) -> LoginResponse:
         phone = _validate_phone(phone)
-        self.sms.verify_code(phone, code.strip())
+        self.sms.verify_code(phone, code.strip(), purpose="login")
 
         user = await self.users.get_by_phone(phone)
         if user is None:
@@ -89,7 +120,6 @@ class AuthService:
                 user.password_hash = hash_password(_validate_password(password))
             await self.users.add(user)
         elif password:
-            # 已有用户：验证码登录时可设置/更新密码
             user.password_hash = hash_password(_validate_password(password))
 
         await self.session.commit()
@@ -131,7 +161,6 @@ class AuthService:
         if not isinstance(subject, str) or not subject:
             raise AppError("Invalid refresh token", code="invalid_token", status_code=401)
 
-        # 旧会话作废，签发新会话
         old_sid = payload.get("sid")
         if isinstance(old_sid, str):
             revoke_session(old_sid)

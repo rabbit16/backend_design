@@ -217,6 +217,51 @@ Authorization: Bearer <access_token>
 
 ### 2.3 语音与问答 QA
 
+适老化约定：**前端文字提问不必传 session_id**。  
+服务端用 Redis（或本地内存回退）按用户缓存当前 `context_id`（即 `qa_sessions.id`）。  
+**固定 30 天过期**（自上下文创建起算）：期内继续提问**不会**刷新过期时间；到期后自动换新上下文。
+
+#### `POST /qa/ask`（需登录）——文字输入（推荐）
+
+```json
+{
+  "question": "今天天气怎么样",
+  "lang": "zh",
+  "new_context": false
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `question` | 用户输入的文字 |
+| `lang` | `zh` \| `en` |
+| `new_context` | `true` 时强制新开上下文（如点「新问题」） |
+
+响应：
+
+```json
+{
+  "context_id": "a1b2c3d4-....",
+  "lang": "zh",
+  "question_text": "今天天气怎么样",
+  "answer_text": "今天晴，气温 18～26℃……",
+  "turn_index_user": 1,
+  "turn_index_assistant": 2,
+  "context_continued": false,
+  "created_at": "2026-07-29T04:01:00Z"
+}
+```
+
+`context_continued=true` 表示沿用未过期的旧上下文（多轮追问）。
+
+#### `POST /qa/context/clear`（需登录）
+
+主动结束当前上下文；下次 `/qa/ask` 会新建。
+
+响应：`{ "ok": true, "context_id": "旧id或null" }`
+
+---
+
 #### `POST /voice/recognize`（需登录，`multipart/form-data`）
 
 | 字段 | 类型 | 说明 |
@@ -234,7 +279,7 @@ Authorization: Bearer <access_token>
 
 #### `POST /qa/sessions`（需登录）
 
-创建一次问答会话。
+创建一次问答会话（显式管理 session 时使用；适老化文字输入请优先用 `/qa/ask`）。
 
 ```json
 {
@@ -513,8 +558,10 @@ app.add_middleware(
 | 注册 | `POST /auth/sms/send`（purpose=register）、`POST /auth/register` |
 | 登录（验证码） | `POST /auth/sms/send`、`POST /auth/login/sms` |
 | 登录（密码） | `POST /auth/login/password` |
-| 首页按住说话 | `POST /voice/recognize` → `POST /qa/sessions` |
+| 首页文字输入 | `POST /qa/ask`（服务端 Redis 托管上下文，默认 30 天） |
+| 首页按住说话 | `POST /voice/recognize` → `POST /qa/ask`（识别文本后提问）或显式 `/qa/sessions` |
 | 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
+| 结束当前对话 | `POST /qa/context/clear` |
 | 档案 OCR | `POST /archives/ocr`、`POST /archives` |
 | 档案时间线 | `GET /archives`、`GET /archives/{id}` |
 | 推送子女 / 导出 | `POST /archives/{id}/share`、`GET /archives/{id}/export` |

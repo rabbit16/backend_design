@@ -11,6 +11,62 @@ def _client() -> TestClient:
     return TestClient(create_app())
 
 
+def test_register_flow() -> None:
+    with _client() as client:
+        send = client.post(
+            "/api/v1/auth/sms/send",
+            json={"phone": "13500135000", "purpose": "register"},
+        )
+        assert send.status_code == 200
+
+        bad_code = client.post(
+            "/api/v1/auth/register",
+            json={
+                "phone": "13500135000",
+                "code": "000000",
+                "password": "secret12",
+                "display_name": "毕小雪",
+            },
+        )
+        assert bad_code.status_code == 401
+        assert bad_code.json()["code"] == "invalid_sms_code"
+
+        ok = client.post(
+            "/api/v1/auth/register",
+            json={
+                "phone": "13500135000",
+                "code": "123456",
+                "password": "secret12",
+                "display_name": "毕小雪",
+                "preferred_lang": "zh",
+            },
+        )
+        assert ok.status_code == 200
+        body = ok.json()
+        assert body["user"]["phone"] == "13500135000"
+        assert body["user"]["display_name"] == "毕小雪"
+        assert body["access_token"]
+
+        # 重复注册
+        client.post(
+            "/api/v1/auth/sms/send",
+            json={"phone": "13500135000", "purpose": "register"},
+        )
+        conflict = client.post(
+            "/api/v1/auth/register",
+            json={"phone": "13500135000", "code": "123456", "password": "secret12"},
+        )
+        assert conflict.status_code == 409
+        assert conflict.json()["code"] == "phone_already_registered"
+
+        # 注册后可用密码登录
+        pwd = client.post(
+            "/api/v1/auth/login/password",
+            json={"phone": "13500135000", "password": "secret12"},
+        )
+        assert pwd.status_code == 200
+
+
 def test_sms_login_flow() -> None:
     with _client() as client:
         send = client.post("/api/v1/auth/sms/send", json={"phone": "13800138000"})

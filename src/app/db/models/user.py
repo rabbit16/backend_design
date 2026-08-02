@@ -70,7 +70,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
 class SmsCode(CreatedAtMixin, Base):
     __tablename__ = "sms_codes"
     __table_args__ = (
-        CheckConstraint("purpose IN ('login', 'reset_password')", name="sms_purpose"),
+        CheckConstraint("purpose IN ('login', 'register', 'reset_password')", name="sms_purpose"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)

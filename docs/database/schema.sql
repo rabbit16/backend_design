@@ -38,14 +38,14 @@ CREATE TABLE IF NOT EXISTS sms_codes (
     id           CHAR(36)     NOT NULL,
     phone        VARCHAR(20)  NOT NULL,
     code         VARCHAR(8)   NOT NULL,
-    purpose      VARCHAR(32)  NOT NULL DEFAULT 'login' COMMENT 'login | reset_password',
+    purpose      VARCHAR(32)  NOT NULL DEFAULT 'login' COMMENT 'login | register | reset_password',
     expires_at   DATETIME(6)  NOT NULL,
     used_at      DATETIME(6)  NULL,
     request_ip   VARCHAR(64)  NULL,
     created_at   DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
     KEY idx_sms_codes_phone_created (phone, created_at),
-    CONSTRAINT ck_sms_purpose CHECK (purpose IN ('login', 'reset_password'))
+    CONSTRAINT ck_sms_purpose CHECK (purpose IN ('login', 'register', 'reset_password'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='短信验证码：POST /auth/sms/send、/auth/login/sms';
 

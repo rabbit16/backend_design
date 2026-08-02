@@ -10,6 +10,7 @@ from app.schemas.auth import (
     OkResponse,
     PasswordLoginRequest,
     RefreshTokenRequest,
+    RegisterRequest,
     SendSmsRequest,
     SendSmsResponse,
     SmsLoginRequest,
@@ -30,7 +31,21 @@ async def send_sms(
     payload: SendSmsRequest,
     service: Annotated[AuthService, Depends(_auth_service)],
 ) -> SendSmsResponse:
-    return await service.send_sms(payload.phone)
+    return await service.send_sms(payload.phone, payload.purpose)
+
+
+@router.post("/register", response_model=LoginResponse)
+async def register(
+    payload: RegisterRequest,
+    service: Annotated[AuthService, Depends(_auth_service)],
+) -> LoginResponse:
+    return await service.register(
+        phone=payload.phone,
+        code=payload.code,
+        password=payload.password,
+        display_name=payload.display_name,
+        preferred_lang=payload.preferred_lang,
+    )
 
 
 @router.post("/login/sms", response_model=LoginResponse)

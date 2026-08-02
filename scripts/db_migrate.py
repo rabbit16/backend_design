@@ -9,7 +9,10 @@ ALEMBIC_INI = ROOT / "alembic.ini"
 
 
 def get_config() -> Config:
-    return Config(str(ALEMBIC_INI))
+    cfg = Config(str(ALEMBIC_INI))
+    # 保证无论从哪启动，都相对项目根目录找 alembic/
+    cfg.set_main_option("script_location", str(ROOT / "alembic"))
+    return cfg
 
 
 def migrate(message: str) -> None:
@@ -35,6 +38,14 @@ def main() -> None:
     downgrade_parser = subparsers.add_parser("downgrade", help="downgrade database")
     downgrade_parser.add_argument("revision")
 
+    stamp_parser = subparsers.add_parser(
+        "stamp",
+        help="mark DB as a revision without running SQL (表已手工建好时用)",
+    )
+    stamp_parser.add_argument("revision", nargs="?", default="head")
+
+    current_parser = subparsers.add_parser("current", help="show current alembic revision")
+
     args = parser.parse_args()
     cfg = get_config()
 
@@ -46,6 +57,10 @@ def main() -> None:
         command.upgrade(cfg, args.revision)
     elif args.command == "downgrade":
         command.downgrade(cfg, args.revision)
+    elif args.command == "stamp":
+        command.stamp(cfg, args.revision)
+    elif args.command == "current":
+        command.current(cfg)
 
 
 if __name__ == "__main__":

@@ -3,15 +3,25 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Lang = Literal["zh", "en"]
+SmsPurpose = Literal["login", "register", "reset_password"]
 
 
 class SendSmsRequest(BaseModel):
     phone: str = Field(min_length=1, max_length=20)
+    purpose: SmsPurpose = "login"
 
 
 class SendSmsResponse(BaseModel):
     ok: bool = True
     expire_in: int
+
+
+class RegisterRequest(BaseModel):
+    phone: str = Field(min_length=1, max_length=20)
+    code: str = Field(min_length=1, max_length=16)
+    password: str = Field(min_length=6, max_length=128)
+    display_name: str | None = Field(default=None, max_length=64)
+    preferred_lang: Lang = "zh"
 
 
 class SmsLoginRequest(BaseModel):
