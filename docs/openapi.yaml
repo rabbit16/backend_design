@@ -49,6 +49,31 @@ paths:
         '429':
           $ref: '#/components/responses/Error'
 
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: 手机号注册（验证码 + 密码，可选昵称）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: 注册成功并返回登录态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+
   /auth/login/sms:
     post:
       tags: [auth]
@@ -577,6 +602,29 @@ components:
         phone:
           type: string
           example: '13800138000'
+        purpose:
+          type: string
+          enum: [login, register, reset_password]
+          default: login
+
+    RegisterRequest:
+      type: object
+      required: [phone, code, password]
+      properties:
+        phone:
+          type: string
+        code:
+          type: string
+        password:
+          type: string
+          minLength: 6
+        display_name:
+          type: string
+          maxLength: 64
+        preferred_lang:
+          type: string
+          enum: [zh, en]
+          default: zh
 
     SendSmsResponse:
       type: object
