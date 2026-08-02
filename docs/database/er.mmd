@@ -1,0 +1,256 @@
+erDiagram
+    users ||--o| user_preferences : "偏好1对1"
+    users ||--o{ auth_sessions : "会话1对多"
+    users ||--o{ family_contacts : "家属1对多"
+    users ||--o| family_push_rules : "推送规则1对1"
+    users ||--o{ media_files : "媒体1对多"
+    users ||--o{ voice_recognize_jobs : "语音识别1对多"
+    users ||--o{ qa_sessions : "问询1对多"
+    users ||--o{ qa_recommendations : "就医建议1对多"
+    users ||--o{ medical_archives : "就诊档案1对多"
+    users ||--o{ archive_ocr_jobs : "OCR任务1对多"
+    users ||--o{ health_summaries : "健康总结1对多"
+    users ||--o{ health_reports : "体检报告1对多"
+    users ||--o{ archive_shares : "推送记录1对多"
+    users ||--o{ archive_exports : "导出任务1对多"
+
+    media_files ||--o{ voice_recognize_jobs : "语音文件"
+    media_files ||--o{ qa_sessions : "问询音频"
+    media_files ||--o{ medical_archives : "就诊单图片"
+    media_files ||--o{ archive_ocr_jobs : "OCR图片"
+    media_files ||--o{ health_reports : "报告PDF"
+    media_files ||--o{ archive_exports : "导出PDF"
+
+    voice_recognize_jobs ||--o{ qa_sessions : "识别结果"
+    qa_sessions ||--o| qa_recommendations : "建议1对1"
+
+    medical_archives ||--o{ archive_shares : "推送档案"
+    medical_archives ||--o{ archive_exports : "导出档案"
+    family_contacts ||--o{ archive_shares : "推送对象"
+
+    health_summaries ||--o{ health_summary_items : "总结条目"
+    health_reports ||--o{ health_report_findings : "异常项"
+
+    users["用户 users"] {
+        char36 id PK "主键UUID"
+        varchar phone UK "登录手机号"
+        varchar password_hash "密码哈希可空"
+        varchar display_name "展示名"
+        varchar preferred_lang "语言zh或en"
+        varchar status "active或disabled"
+        datetime created_at "创建时间UTC"
+        datetime updated_at "更新时间UTC"
+        datetime deleted_at "软删除时间"
+    }
+
+    sms_codes["短信验证码 sms_codes"] {
+        char36 id PK "主键"
+        varchar phone "接收手机号"
+        varchar code "验证码"
+        varchar purpose "login或reset_password"
+        datetime expires_at "过期时间"
+        datetime used_at "使用时间"
+        varchar request_ip "请求IP"
+        datetime created_at "发送时间"
+    }
+
+    auth_sessions["登录会话 auth_sessions"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar refresh_token_hash UK "刷新令牌哈希"
+        varchar device_info "设备信息"
+        datetime expires_at "会话过期"
+        datetime revoked_at "注销时间"
+        datetime created_at "登录时间"
+    }
+
+    user_preferences["用户偏好 user_preferences"] {
+        char36 user_id PK_FK "用户主键"
+        varchar preferred_lang "界面语言"
+        decimal font_scale "字体缩放预留"
+        boolean high_contrast "高对比预留"
+        datetime updated_at "更新时间"
+    }
+
+    media_files["媒体文件 media_files"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar kind "audio或image或pdf"
+        varchar mime_type "MIME类型"
+        varchar storage_key "存储路径"
+        varchar url "访问URL"
+        bigint size_bytes "文件大小"
+        varchar checksum "校验和"
+        datetime created_at "上传时间"
+        datetime deleted_at "软删除"
+    }
+
+    voice_recognize_jobs["语音识别 voice_recognize_jobs"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        char36 media_id FK "音频文件"
+        varchar lang "识别语言"
+        text recognized_text "识别文本"
+        int duration_ms "时长毫秒"
+        varchar status "pending或succeeded或failed"
+        text error_message "失败原因"
+        datetime created_at "创建时间"
+    }
+
+    qa_sessions["问询会话 qa_sessions"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar lang "问答语言"
+        varchar input_mode "voice或text"
+        text question_text "用户问题"
+        text answer_text "系统回答"
+        char36 audio_media_id FK "关联音频"
+        char36 voice_job_id FK "关联识别任务"
+        datetime created_at "创建时间"
+        datetime deleted_at "软删除"
+    }
+
+    qa_recommendations["就医建议 qa_recommendations"] {
+        char36 id PK "主键"
+        char36 session_id FK_UK "对应问询会话"
+        char36 user_id FK "所属用户"
+        varchar title "标题"
+        text body "建议正文"
+        varchar risk_level "low或medium或high"
+        text disclaimer "免责声明"
+        datetime created_at "生成时间"
+    }
+
+    medical_archives["就诊单档案 medical_archives"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        text diagnosis "诊断"
+        text medicine "用药"
+        date visit_date "就诊日期"
+        text raw_ocr_text "OCR原文"
+        char36 image_media_id FK "病历图片"
+        varchar source "camera或album"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+        datetime deleted_at "软删除"
+    }
+
+    archive_ocr_jobs["档案OCR任务 archive_ocr_jobs"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        char36 image_media_id FK "图片文件"
+        varchar source "camera或album"
+        text diagnosis "识别诊断"
+        text medicine "识别用药"
+        date visit_date "识别就诊日"
+        text raw_ocr_text "OCR原文"
+        varchar status "任务状态"
+        datetime created_at "创建时间"
+    }
+
+    health_summaries["健康问题总结 health_summaries"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar title "标题"
+        date exam_date "最近检查日"
+        varchar exam_no "检查号"
+        text summary_text "总结正文"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+        datetime deleted_at "软删除"
+    }
+
+    health_summary_items["总结条目 health_summary_items"] {
+        char36 id PK "主键"
+        char36 summary_id FK "所属总结"
+        int sort_order "排序"
+        text content "条目内容"
+        varchar severity "严重程度可选"
+        datetime created_at "创建时间"
+    }
+
+    health_reports["健康档案报告 health_reports"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar patient_name "报告姓名"
+        date exam_date "体检日期"
+        varchar org_name "机构名"
+        varchar voucher_no "检查凭证号"
+        varchar report_type "报告类型徽章"
+        char36 pdf_media_id FK "报告PDF"
+        json raw_payload "原始JSON"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+        datetime deleted_at "软删除"
+    }
+
+    health_report_findings["报告异常项 health_report_findings"] {
+        char36 id PK "主键"
+        char36 report_id FK "所属报告"
+        int sort_order "排序"
+        text title "异常标题"
+        text suggestion "建议文案"
+        varchar risk_level "风险等级"
+        datetime created_at "创建时间"
+    }
+
+    report_glossaries["术语释义 report_glossaries"] {
+        char36 id PK "主键"
+        varchar term "术语名"
+        text definition "释义"
+        int sort_order "排序"
+        boolean enabled "是否启用"
+        datetime created_at "创建时间"
+    }
+
+    family_contacts["家属联系人 family_contacts"] {
+        char36 id PK "主键"
+        char36 user_id FK "所属用户"
+        varchar name "称呼如女儿"
+        varchar phone "联系电话"
+        varchar relation "daughter或son或other"
+        datetime created_at "创建时间"
+        datetime updated_at "更新时间"
+        datetime deleted_at "软删除"
+    }
+
+    family_push_rules["家属推送规则 family_push_rules"] {
+        char36 user_id PK_FK "用户主键"
+        boolean on_record_saved "就诊单保存后推送"
+        boolean on_abnormal "异常指标提醒"
+        boolean on_visit "就诊复查提醒"
+        datetime updated_at "更新时间"
+    }
+
+    archive_shares["档案推送 archive_shares"] {
+        char36 id PK "主键"
+        char36 archive_id FK "就诊档案"
+        char36 user_id FK "发起用户"
+        char36 contact_id FK "家属联系人"
+        text message "留言"
+        varchar status "queued或sent或failed"
+        datetime created_at "创建时间"
+        datetime sent_at "发送时间"
+    }
+
+    archive_exports["档案导出 archive_exports"] {
+        char36 id PK "主键"
+        char36 archive_id FK "就诊档案"
+        char36 user_id FK "所属用户"
+        char36 pdf_media_id FK "导出PDF"
+        varchar download_url "下载链接"
+        datetime expires_at "链接过期"
+        varchar status "pending或ready或failed"
+        datetime created_at "创建时间"
+    }
+
+    audit_logs["审计日志 audit_logs"] {
+        bigint id PK "自增主键"
+        char36 user_id "操作用户可空"
+        varchar action "动作如login"
+        varchar resource "资源类型"
+        char36 resource_id "资源ID"
+        json detail "详情JSON"
+        varchar ip "IP"
+        datetime created_at "记录时间"
+    }
