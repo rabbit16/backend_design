@@ -138,15 +138,9 @@ curl -X POST http://localhost:8000/api/v1/tasks/demo \
 
 ## 替换 AI Gateway（OpenAI 协议）
 
-业务层只依赖 `AIGateway`：`chat_completions` / `chat_completions_stream`，入参/出参为 `src/app/schemas/openai_chat.py`（与 OpenAI `/v1/chat/completions` 对齐）。
+业务层只依赖 `AIGateway`：`chat_completions` / `chat_completions_stream`，入参/出参为 `src/app/schemas/openai_chat.py`（与 OpenAI `/v1/chat/completions` 对齐）。启动时会创建**应用级网关**，`/qa/ask` 与 `/chat/completions` 默认都走它，真正 POST 到 `{OPENAI_API_BASE}/chat/completions`。
 
-**本地开发（默认）**
-
-```env
-AI_GATEWAY_PROVIDER=echo
-```
-
-**切换任意 OpenAI 兼容模型**
+**真实 LLM（推荐）**
 
 ```env
 AI_GATEWAY_PROVIDER=openai
@@ -164,7 +158,13 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=deepseek-chat
 ```
 
-新增供应商：实现 `AIGateway`，在 `src/app/gateways/providers.py` 注册即可；QA（`/qa/ask`）与 Chat 均走同一协议。
+**仅本地单测 / 离线**
+
+```env
+AI_GATEWAY_PROVIDER=echo
+```
+
+pytest 已在 `tests/conftest.py` 强制 `echo`，不会打真实 API。
 
 ## 高并发扩展建议
 

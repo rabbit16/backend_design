@@ -262,6 +262,32 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 `context_continued=true` 表示沿用未过期的旧上下文（多轮追问）。
 
+#### `POST /qa/ask/audio`（需登录）——语音输入 → 文本 SSE
+
+`multipart/form-data`，服务端用 OpenAI SDK 以 `input_audio` 调用音频模型，**只流式返回文本**（`modalities=["text"]`）。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `file` | file | wav / mp3 |
+| `lang` | string | `zh` \| `en` |
+| `new_context` | bool | 是否强制新上下文 |
+| `prompt` | string | 可选提示语（默认适老化口语提示） |
+| `audio_format` | string | 可选 `wav` \| `mp3`（不传则按文件名推断） |
+
+事件顺序同 `/qa/ask`（meta → token* → done）。
+
+#### `POST /qa/ask/audio/json`（需登录）——base64 语音
+
+```json
+{
+  "audio_base64": "...",
+  "audio_format": "wav",
+  "prompt": "请用简短口语化中文回答录音里的问题。",
+  "lang": "zh",
+  "new_context": false
+}
+```
+
 #### `POST /qa/context/clear`（需登录）
 
 主动结束当前上下文；下次 `/qa/ask` 会新建。

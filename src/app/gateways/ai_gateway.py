@@ -21,9 +21,15 @@ from app.utils.ids import new_request_id
 
 def _last_user_text(request: ChatCompletionRequest) -> str:
     for msg in reversed(request.messages):
-        if msg.role == "user" and msg.content:
-            return msg.content
-    return request.messages[-1].content if request.messages else ""
+        if msg.role == "user":
+            text = msg.text.strip()
+            if text:
+                return text
+            if isinstance(msg.content, list):
+                return "[audio]"
+    if request.messages:
+        return request.messages[-1].text or "[audio]"
+    return ""
 
 
 class EchoAIGateway:

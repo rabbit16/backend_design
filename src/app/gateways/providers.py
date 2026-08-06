@@ -1,7 +1,11 @@
 from app.core.config import get_settings
+from app.core.exceptions import AppError
+from app.core.logging import get_logger
 from app.gateways.ai_gateway import EchoAIGateway, ReverseEchoAIGateway
 from app.gateways.base import AIGateway
 from app.gateways.openai_compatible import OpenAICompatibleGateway
+
+logger = get_logger(__name__)
 
 
 def create_provider(provider: str | None = None) -> AIGateway:
@@ -9,15 +13,25 @@ def create_provider(provider: str | None = None) -> AIGateway:
     name = (provider or settings.ai_gateway_provider).strip().lower()
 
     if name in {"echo"}:
+        logger.info("ai_gateway_created", provider="echo")
         return EchoAIGateway()
     if name in {"reverse-echo", "reverse_echo"}:
+        logger.info("ai_gateway_created", provider="reverse-echo")
         return ReverseEchoAIGateway()
     if name in {"openai", "openai-compatible", "openai_compatible"}:
-        return OpenAICompatibleGateway()
+        gateway = OpenAICompatibleGateway()
+        logger.info(
+            "ai_gateway_created",
+            provider="openai",
+            api_base=gateway.api_base,
+            model=gateway.default_model,
+        )
+        return gateway
 
-    raise ValueError(
-        f"Unsupported AI gateway provider: {provider!r}. "
-        f"Use one of: {', '.join(list_providers())}"
+    raise AppError(
+        f"不支持的 AI 网关: {provider!r}，可选: {', '.join(list_providers())}",
+        code="unsupported_ai_provider",
+        status_code=500,
     )
 
 

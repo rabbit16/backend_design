@@ -10,6 +10,9 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     app: str
     env: str
+    ai_provider: str | None = None
+    openai_model: str | None = None
+    openai_configured: bool | None = None
 
 
 class PageParams(BaseModel):

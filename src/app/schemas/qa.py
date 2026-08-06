@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.openai_chat import AudioFormat
+
 Lang = Literal["zh", "en"]
 
 
@@ -12,6 +14,19 @@ class TextAskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     lang: Lang = "zh"
     # 可选：强制开新上下文（例如用户点「新问题」）
+    new_context: bool = False
+
+
+class AudioAskJsonRequest(BaseModel):
+    """语音问答 JSON：base64 音频 + 可选提示语。"""
+
+    audio_base64: str = Field(min_length=1, description="base64 编码音频")
+    audio_format: AudioFormat = "wav"
+    prompt: str = Field(
+        default="请用简短、清楚、口语化的中文回答录音里的问题。",
+        max_length=2000,
+    )
+    lang: Lang = "zh"
     new_context: bool = False
 
 

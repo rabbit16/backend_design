@@ -21,14 +21,19 @@ class Settings(BaseSettings):
     access_log: bool = True
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
 
-    ai_gateway_provider: str = "echo"
-    ai_gateway_timeout_seconds: float = 60.0
-    # OpenAI 兼容接口（provider=openai 时生效；可指向 DeepSeek/vLLM/Ollama 等）
+    # echo | reverse-echo | openai（OpenAI 兼容 /chat/completions）
+    ai_gateway_provider: str = "openai"
+    ai_gateway_timeout_seconds: float = 120.0
+    # OpenAI 兼容接口（DeepSeek / 通义 / vLLM / Ollama 等改 api_base 即可）
     openai_api_base: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    # 语音输入 → 文本输出（OpenAI audio chat 模型）
+    openai_audio_model: str = "gpt-audio"
     openai_temperature: float = 0.7
     openai_max_tokens: int = 1024
+    # 可选：显式 HTTP 代理，如 http://127.0.0.1:7890；空则跟随环境变量
+    openai_http_proxy: str = ""
 
     max_ws_connections: int = 10_000
 
@@ -38,7 +43,7 @@ class Settings(BaseSettings):
     database_max_overflow: int = 40
 
     redis_url: str = "redis://localhost:6379/0"
-    redis_enabled: bool = False
+    redis_enabled: bool = True
     redis_max_connections: int = 100
 
     # 适老化问答：服务端托管上下文；创建时固定 30 天过期，期内提问不续期
@@ -71,3 +76,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def clear_settings_cache() -> None:
+    get_settings.cache_clear()

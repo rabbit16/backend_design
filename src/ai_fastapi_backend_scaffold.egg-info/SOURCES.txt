@@ -14,6 +14,7 @@ src/app/api/http/auth.py
 src/app/api/http/chat.py
 src/app/api/http/health.py
 src/app/api/http/me.py
+src/app/api/http/qa.py
 src/app/api/http/tasks.py
 src/app/api/ws/__init__.py
 src/app/api/ws/chat.py
@@ -31,11 +32,18 @@ src/app/db/__init__.py
 src/app/db/base.py
 src/app/db/session.py
 src/app/db/models/__init__.py
+src/app/db/models/archive.py
+src/app/db/models/audit.py
 src/app/db/models/chat_message.py
+src/app/db/models/family.py
+src/app/db/models/health.py
+src/app/db/models/media.py
+src/app/db/models/qa.py
 src/app/db/models/user.py
 src/app/gateways/__init__.py
 src/app/gateways/ai_gateway.py
 src/app/gateways/base.py
+src/app/gateways/openai_compatible.py
 src/app/gateways/providers.py
 src/app/gateways/registry.py
 src/app/middleware/__init__.py
@@ -53,6 +61,8 @@ src/app/schemas/__init__.py
 src/app/schemas/auth.py
 src/app/schemas/chat.py
 src/app/schemas/common.py
+src/app/schemas/openai_chat.py
+src/app/schemas/qa.py
 src/app/schemas/response.py
 src/app/security/__init__.py
 src/app/security/jwt.py
@@ -60,6 +70,8 @@ src/app/security/password.py
 src/app/services/__init__.py
 src/app/services/auth_service.py
 src/app/services/chat_service.py
+src/app/services/context_store.py
+src/app/services/qa_service.py
 src/app/services/sms_service.py
 src/app/tasks/__init__.py
 src/app/tasks/queue.py
@@ -69,3 +81,8 @@ tests/test_auth.py
 tests/test_chat.py
 tests/test_health.py
 tests/test_models.py
+tests/test_openai_gateway.py
+tests/test_openai_http.py
+tests/test_orm_models.py
+tests/test_qa_audio.py
+tests/test_qa_text.py

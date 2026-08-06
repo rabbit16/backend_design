@@ -199,26 +199,27 @@ cp .env.example .env
 | `AI_GATEWAY_PROVIDER` | 大模型网关：`echo` / `reverse-echo` / `openai` | `echo` |
 | `OPENAI_API_BASE` | OpenAI 兼容 Base URL（仅 `openai`） | `https://api.openai.com/v1` |
 | `OPENAI_API_KEY` | API Key | 空 |
-| `OPENAI_MODEL` | 上游模型名 | `gpt-4o-mini` |
+| `OPENAI_MODEL` | 上游文本模型名 | `gpt-4o-mini` |
+| `OPENAI_AUDIO_MODEL` | 语音输入→文本输出模型 | `gpt-audio` |
+| `OPENAI_HTTP_PROXY` | 可选 HTTP 代理 | 空 |
 
 ### 4.2.1 切换大模型（OpenAI 协议）
 
-业务统一走 OpenAI Chat Completions：`messages[]` + 流式 `delta.content`。  
-适老化问答 `/qa/ask` 会把历史轮次拼成标准 messages，再调网关。
+业务统一走 OpenAI Python SDK（`AsyncOpenAI.chat.completions`）：文本 `messages[]`，语音为 `input_audio` + `modalities=["text"]` 流式文本。  
+适老化问答 `/qa/ask`、`/qa/ask/audio` 会把历史轮次拼进 messages，再调网关。
 
-本地默认：
-
-```env
-AI_GATEWAY_PROVIDER=echo
-```
-
-切真实模型（任意兼容 `/v1/chat/completions` 的服务）：
+本地默认走真实 LLM（需 Key）：
 
 ```env
 AI_GATEWAY_PROVIDER=openai
-OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
+```
+
+离线 / 单测用 echo：
+
+```env
+AI_GATEWAY_PROVIDER=echo
 ```
 
 DeepSeek 示例：

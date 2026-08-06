@@ -1,18 +1,76 @@
-"""OpenAI Chat Completions 兼容协议（便于切换任意兼容模型）。"""
+"""OpenAI Chat Completions 兼容协议（文本 + 多模态音频）。"""
 
 from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ChatRole = Literal["system", "user", "assistant", "tool"]
+AudioFormat = Literal["wav", "mp3"]
+
+
+class InputAudio(BaseModel):
+    data: str = Field(min_length=1, description="base64 音频")
+    format: AudioFormat = "wav"
+
+
+class TextContentPart(BaseModel):
+    type: Literal["text"] = "text"
+    text: str = Field(min_length=0, max_length=128_000)
+
+
+class InputAudioContentPart(BaseModel):
+    type: Literal["input_audio"] = "input_audio"
+    input_audio: InputAudio
+
+
+ContentPart = TextContentPart | InputAudioContentPart
+
+
+def _parts_to_text(parts: list[Any]) -> str:
+    texts: list[str] = []
+    for item in parts:
+        if isinstance(item, TextContentPart):
+            texts.append(item.text)
+        elif isinstance(item, dict) and item.get("type") == "text":
+            texts.append(str(item.get("text") or ""))
+        elif isinstance(item, str):
+            texts.append(item)
+    return "".join(texts)
 
 
 class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     role: ChatRole
-    content: str = Field(min_length=0, max_length=128_000)
+    content: str | list[ContentPart] = Field(default="")
     name: str | None = None
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _coerce_content(cls, value: Any) -> str | list[Any]:
+        if value is None:
+            return ""
+        if isinstance(value, list):
+            return value
+        return str(value)
+
+    @property
+    def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        return _parts_to_text(list(self.content))
+
+    def to_openai_param(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"role": self.role}
+        if self.name:
+            payload["name"] = self.name
+        if isinstance(self.content, str):
+            payload["content"] = self.content
+        else:
+            payload["content"] = [part.model_dump(exclude_none=True) for part in self.content]
+        return payload
 
 
 class ChatCompletionRequest(BaseModel):
@@ -25,27 +83,36 @@ class ChatCompletionRequest(BaseModel):
     presence_penalty: float | None = Field(default=None, ge=-2, le=2)
     frequency_penalty: float | None = Field(default=None, ge=-2, le=2)
     user: str | None = Field(default=None, max_length=128)
-    # 透传给上游的额外字段（如 response_format、tools）
+    # 音频模型输出模态；语音提问默认只要文本流
+    modalities: list[Literal["text", "audio"]] | None = None
+    audio: dict[str, Any] | None = None
+    # 透传给上游的额外字段
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatCompletionChoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     index: int = 0
     message: ChatMessage
     finish_reason: str | None = "stop"
 
 
 class ChatCompletionUsage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
 
 
 class ChatCompletionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     id: str
-    object: Literal["chat.completion"] = "chat.completion"
-    created: int
-    model: str
+    object: str = "chat.completion"
+    created: int = 0
+    model: str = ""
     choices: list[ChatCompletionChoice]
     usage: ChatCompletionUsage | None = None
     provider: str | None = None
@@ -54,26 +121,41 @@ class ChatCompletionResponse(BaseModel):
     def content(self) -> str:
         if not self.choices:
             return ""
-        return self.choices[0].message.content
+        return self.choices[0].message.text
 
 
 class ChatCompletionChunkDelta(BaseModel):
-    role: ChatRole | None = None
+    model_config = ConfigDict(extra="ignore")
+
+    role: str | None = None
     content: str | None = None
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _coerce_delta_content(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return _parts_to_text(value)
+        return str(value)
 
 
 class ChatCompletionChunkChoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     index: int = 0
-    delta: ChatCompletionChunkDelta
+    delta: ChatCompletionChunkDelta = Field(default_factory=ChatCompletionChunkDelta)
     finish_reason: str | None = None
 
 
 class ChatCompletionChunk(BaseModel):
-    id: str
-    object: Literal["chat.completion.chunk"] = "chat.completion.chunk"
-    created: int
-    model: str
-    choices: list[ChatCompletionChunkChoice]
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = ""
+    object: str = "chat.completion.chunk"
+    created: int = 0
+    model: str = ""
+    choices: list[ChatCompletionChunkChoice] = Field(default_factory=list)
     provider: str | None = None
 
     @property
