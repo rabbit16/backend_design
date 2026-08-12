@@ -361,7 +361,124 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 ---
 
+### 2.4.1 健康问题总结（档案首页卡片）
+
+对应表：`health_summaries` + `health_summary_items`
+
+#### `GET /health-summaries`（需登录）
+
+按 `updated_at` 倒序返回当前用户的总结列表；每条带 `items`。
+
+响应：
+
+```json
+{
+  "items": [
+    {
+      "id": "hs_xxx",
+      "title": "健康问题总结",
+      "exam_date": "2025-11-03",
+      "exam_no": "312101033225",
+      "summary_text": "综合近期体检与就诊记录……",
+      "items": [
+        {
+          "id": "hsi_1",
+          "content": "体重指数偏低（BMI 18.2），需加强营养与适量运动",
+          "severity": "medium",
+          "sort_order": 0
+        }
+      ],
+      "created_at": "2026-07-29T04:02:00Z",
+      "updated_at": "2026-07-29T04:02:00Z"
+    }
+  ]
+}
+```
+
+前端：第一条含 `items` 的记录展示为「健康问题总结」主卡片；其余展示为普通总结卡片。
+
+---
+
+### 2.4.2 健康档案报告（时间轴 / 详情）
+
+对应表：`health_reports` + `health_report_findings`；术语可选自 `report_glossaries`
+
+#### `GET /health-reports`（需登录）
+
+| 参数 | 说明 |
+|------|------|
+| `page` | 默认 1 |
+| `page_size` | 默认 20，最大 100 |
+
+按 `exam_date` 倒序。
+
+```json
+{
+  "items": [
+    {
+      "id": "hr_xxx",
+      "patient_name": "毕小雪",
+      "exam_date": "2025-11-03",
+      "org_name": "瑞慈体检上海静安机构",
+      "voucher_no": "312101033225",
+      "report_type": "体检报告"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+#### `GET /health-reports/{id}`（需登录）
+
+```json
+{
+  "id": "hr_xxx",
+  "patient_name": "毕小雪",
+  "exam_date": "2025-11-03",
+  "org_name": "瑞慈体检上海静安机构",
+  "voucher_no": "312101033225",
+  "report_type": "体检报告",
+  "findings": [
+    {
+      "id": "hrf_1",
+      "title": "【1】体重过低。体重指数 BMI 值偏低（18.2）。",
+      "suggestion": "建议平衡膳食，适量运动，定期复查体重。",
+      "risk_level": "medium",
+      "sort_order": 0
+    }
+  ],
+  "full_text": "完整报告正文……",
+  "glossary": [
+    {
+      "id": "g1",
+      "term": "随诊",
+      "definition": "如有不适，及时就诊。",
+      "sort_order": 0
+    }
+  ]
+}
+```
+
+`full_text` 可从 `health_reports.raw_payload` 拼出，或存独立字段；没有则前端用占位文案。  
+`glossary` 可内嵌返回，也可另提供 `GET /report-glossaries`（全局表，无 user_id）。
+
+#### `GET /report-glossaries`（需登录，可选）
+
+```json
+{
+  "items": [
+    {"id": "g1", "term": "随诊", "definition": "如有不适，及时就诊。", "sort_order": 0}
+  ]
+}
+```
+
+---
+
 ### 2.4 档案 Archives（病历 OCR / 时间线）
+
+对应表：`medical_archives`、`archive_ocr_jobs`（识别中间态）
 
 #### `POST /archives/ocr`（需登录，`multipart/form-data`）
 
@@ -583,6 +700,14 @@ app.add_middleware(
 
 开发时可把本仓库的 `docs/openapi.yaml` 作为契约：先按 schema 写 Pydantic 模型，再实现业务。
 
+档案页（健康总结 / 报告）可直接参考：
+
+```text
+docs/backend/archive_routes_example.py
+docs/database/seed_archive.sql
+docs/backend/README.md
+```
+
 ---
 
 ## 4. 与前端页面对应关系
@@ -597,6 +722,9 @@ app.add_middleware(
 | 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
 | 结束当前对话 | `POST /qa/context/clear` |
 | 档案 OCR | `POST /archives/ocr`、`POST /archives` |
+| 档案首页总结 | `GET /health-summaries`（表 `health_summaries` / `health_summary_items`） |
+| 健康档案报告 | `GET /health-reports`、`GET /health-reports/{id}`（表 `health_reports` / `health_report_findings`） |
+| 报告术语 | `GET /report-glossaries` 或详情内嵌 `glossary`（表 `report_glossaries`） |
 | 档案时间线 | `GET /archives`、`GET /archives/{id}` |
 | 推送子女 / 导出 | `POST /archives/{id}/share`、`GET /archives/{id}/export` |
 | 个人中心 | `/me`、`/me/preferences`、`/family/*`、`POST /auth/password`、`POST /auth/logout` |
