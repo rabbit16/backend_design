@@ -361,13 +361,40 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 ---
 
+### 2.4.0 档案展示页怎么拼（给后端）
+
+前端**不要求**统一时间线接口。展示页只读下面 5 个 GET，时间轴由前端把体检列表和就诊列表按日期倒序合并。
+
+| 页面 | 接口 |
+|------|------|
+| 档案首页总结卡片 | `GET /health-summaries` |
+| 时间轴 · 体检 | `GET /health-reports?page=1&page_size=100` |
+| 时间轴 · 就诊 | `GET /archives?page=1&page_size=100` |
+| 详情 · 体检 | `GET /health-reports/{id}` |
+| 详情 · 就诊 | `GET /archives/{id}` |
+
+约定：
+
+- 只返回当前用户、`deleted_at IS NULL` 的数据
+- 列表为空返回 `{ "items": [] }`（可带 `total: 0`），不要 404
+- 详情找不到或不是本人：`404`
+- 日期字段：`YYYY-MM-DD`；时间字段：ISO 8601 UTC
+- 两个列表接口前端用 `Promise.allSettled`：一边失败另一边仍展示
+- **不要**做 `GET /timeline`；**不要**把就诊写入 `health_reports` 或把体检写入 `medical_archives`
+
+`GET /report-glossaries` 前端不调用。术语请内嵌在 `GET /health-reports/{id}` 的 `glossary`。
+
+---
+
 ### 2.4.1 健康问题总结（档案首页卡片）
 
 对应表：`health_summaries` + `health_summary_items`
 
 #### `GET /health-summaries`（需登录）
 
-按 `updated_at` 倒序返回当前用户的总结列表；每条带 `items`。
+按 `updated_at` 倒序返回当前用户的总结列表；每条带 `items`（按 `sort_order ASC`）。
+
+`exam_date`、`exam_no`、`severity` 均可为 `null`。
 
 响应：
 
@@ -399,18 +426,21 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 ---
 
-### 2.4.2 健康档案报告（时间轴 / 详情）
+### 2.4.2 健康档案报告（体检时间轴 / 详情）
 
-对应表：`health_reports` + `health_report_findings`；术语可选自 `report_glossaries`
+对应表：`health_reports` + `health_report_findings`；术语来自 `report_glossaries`（全局，无 `user_id`）
+
+前端时间轴会把本列表与 `GET /archives` **合并后按日期倒序**。本接口只返回体检。
 
 #### `GET /health-reports`（需登录）
 
 | 参数 | 说明 |
 |------|------|
 | `page` | 默认 1 |
-| `page_size` | 默认 20，最大 100 |
+| `page_size` | 默认 20，最大 100；前端展示页传 `100` |
 
-按 `exam_date` 倒序。
+`ORDER BY exam_date DESC, created_at DESC`。  
+列表**不要**带 `findings` / `full_text` / `glossary`。
 
 ```json
 {
@@ -426,11 +456,15 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
   ],
   "total": 1,
   "page": 1,
-  "page_size": 20
+  "page_size": 100
 }
 ```
 
 #### `GET /health-reports/{id}`（需登录）
+
+`findings` 按 `sort_order ASC`。  
+`full_text` 从 `health_reports.raw_payload.full_text` 取出（不要把整份 JSON 返回前端）；没有则 `null`，前端用占位文案。  
+`glossary`：**请内嵌返回**（`report_glossaries WHERE enabled = 1 ORDER BY sort_order`）。
 
 ```json
 {
@@ -461,10 +495,9 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 }
 ```
 
-`full_text` 可从 `health_reports.raw_payload` 拼出，或存独立字段；没有则前端用占位文案。  
-`glossary` 可内嵌返回，也可另提供 `GET /report-glossaries`（全局表，无 user_id）。
-
 #### `GET /report-glossaries`（需登录，可选）
+
+前端展示页不调用。若已在报告详情内嵌 `glossary`，本接口可暂缓。
 
 ```json
 {
@@ -476,9 +509,11 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 ---
 
-### 2.4 档案 Archives（病历 OCR / 时间线）
+### 2.4 档案 Archives（就诊单列表 / OCR）
 
 对应表：`medical_archives`、`archive_ocr_jobs`（识别中间态）
+
+展示页只读 `GET /archives`、`GET /archives/{id}`。OCR 写入（`POST /archives/ocr`、`POST /archives`）及推送/导出可后做。
 
 #### `POST /archives/ocr`（需登录，`multipart/form-data`）
 
@@ -494,6 +529,7 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
   "diagnosis": "支气管炎倾向，建议复查",
   "medicine": "按医嘱服用止咳药，注意饮水",
   "visit_date": "2026-07-27",
+  "visit_no": "MZ202607270018",
   "raw_ocr_text": "原始 OCR 全文……"
 }
 ```
@@ -502,13 +538,18 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 #### `GET /archives`（需登录）
 
+就诊单列表。前端与 `GET /health-reports` 合并成「健康档案报告」时间轴。  
+时间轴卡片会用到：`diagnosis`、`medicine`、`visit_date`、`visit_no`。
+
+`ORDER BY visit_date DESC, created_at DESC`。
+
 查询参数：
 
 | 参数 | 说明 |
 |------|------|
-| `q` | 关键词搜索 |
+| `q` | 关键词搜索；前端展示页不传，可暂缓 |
 | `page` | 默认 1 |
-| `page_size` | 默认 20，最大 100 |
+| `page_size` | 默认 20，最大 100；前端展示页传 `100` |
 
 响应：
 
@@ -517,7 +558,7 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
   "items": [ /* ArchiveRecord */ ],
   "total": 2,
   "page": 1,
-  "page_size": 20
+  "page_size": 100
 }
 ```
 
@@ -529,6 +570,7 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
   "diagnosis": "...",
   "medicine": "...",
   "visit_date": "2026-07-27",
+  "visit_no": "MZ202607270018",
   "raw_ocr_text": "...",
   "image_url": "https://...",
   "created_at": "2026-07-29T04:02:00Z",
@@ -536,17 +578,20 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 }
 ```
 
+列表里 `raw_ocr_text` / `image_url` 可空；详情接口必须能返回 `raw_ocr_text`（没有则 `null`）。
+
 ---
 
 #### `POST /archives`（需登录）
 
-保存 OCR 结果到档案。
+保存 OCR 结果到档案。同一用户下 `visit_no` 未删除时唯一。
 
 ```json
 {
   "diagnosis": "...",
   "medicine": "...",
   "visit_date": "2026-07-27",
+  "visit_no": "MZ202607270018",
   "raw_ocr_text": "可选",
   "image_url": "可选"
 }
@@ -558,10 +603,14 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 #### `GET /archives/{id}`（需登录）
 
+就诊单详情。前端「完整报告」Tab 使用 `raw_ocr_text`。校验所属用户，否则 `404`。
+
+响应：`200` + `ArchiveRecord`（同上）。
+
 #### `PATCH /archives/{id}`（需登录）
 
 ```json
-{ "diagnosis": "...", "medicine": "...", "visit_date": "2026-07-27" }
+{ "diagnosis": "...", "medicine": "...", "visit_date": "2026-07-27", "visit_no": "MZ202607270018" }
 ```
 
 #### `DELETE /archives/{id}`（需登录）
@@ -700,12 +749,13 @@ app.add_middleware(
 
 开发时可把本仓库的 `docs/openapi.yaml` 作为契约：先按 schema 写 Pydantic 模型，再实现业务。
 
-档案页（健康总结 / 报告）可直接参考：
+档案页展示接口可直接参考：
 
 ```text
-docs/backend/archive_routes_example.py
+docs/backend/archive_routes_example.py   # 已有总结/体检；就诊 GET /archives 需按契约补
 docs/database/seed_archive.sql
 docs/backend/README.md
+docs/openapi.yaml                        # 已含 health-summaries / health-reports / archives
 ```
 
 ---
@@ -721,12 +771,13 @@ docs/backend/README.md
 | 首页按住说话 | `POST /voice/recognize` → `POST /qa/ask`（识别文本后提问）或显式 `/qa/sessions` |
 | 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
 | 结束当前对话 | `POST /qa/context/clear` |
-| 档案 OCR | `POST /archives/ocr`、`POST /archives` |
+| 档案 OCR（写入，可后做） | `POST /archives/ocr`、`POST /archives` |
 | 档案首页总结 | `GET /health-summaries`（表 `health_summaries` / `health_summary_items`） |
-| 健康档案报告 | `GET /health-reports`、`GET /health-reports/{id}`（表 `health_reports` / `health_report_findings`） |
-| 报告术语 | `GET /report-glossaries` 或详情内嵌 `glossary`（表 `report_glossaries`） |
-| 档案时间线 | `GET /archives`、`GET /archives/{id}` |
-| 推送子女 / 导出 | `POST /archives/{id}/share`、`GET /archives/{id}/export` |
+| 健康档案报告时间轴 | 前端合并 `GET /health-reports` + `GET /archives`（不要单独做 timeline 接口） |
+| 体检详情 | `GET /health-reports/{id}`（`findings` + `full_text` + 内嵌 `glossary`） |
+| 就诊详情 | `GET /archives/{id}`（`raw_ocr_text` 作完整报告） |
+| 报告术语 | 详情内嵌 `glossary`；`GET /report-glossaries` 可选 |
+| 推送子女 / 导出（可后做） | `POST /archives/{id}/share`、`GET /archives/{id}/export` |
 | 个人中心 | `/me`、`/me/preferences`、`/family/*`、`POST /auth/password`、`POST /auth/logout` |
 
 前端调用入口：

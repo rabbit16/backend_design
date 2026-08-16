@@ -34,6 +34,7 @@ class MedicalArchive(TimestampMixin, SoftDeleteMixin, Base):
     diagnosis: Mapped[str] = mapped_column(Text, nullable=False)
     medicine: Mapped[str] = mapped_column(Text, nullable=False)
     visit_date: Mapped[date] = mapped_column(Date, nullable=False)
+    visit_no: Mapped[str] = mapped_column(String(64), nullable=False)
     raw_ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_media_id: Mapped[str | None] = mapped_column(
         String(36),
@@ -77,6 +78,7 @@ class ArchiveOcrJob(CreatedAtMixin, Base):
     diagnosis: Mapped[str | None] = mapped_column(Text, nullable=True)
     medicine: Mapped[str | None] = mapped_column(Text, nullable=True)
     visit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    visit_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
     raw_ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="succeeded")
 

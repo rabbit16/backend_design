@@ -12,6 +12,8 @@ tags:
   - name: me
   - name: voice
   - name: qa
+  - name: health-summaries
+  - name: health-reports
   - name: archives
   - name: family
 paths:
@@ -284,6 +286,85 @@ paths:
               schema:
                 $ref: '#/components/schemas/MedicalRecommendation'
 
+  /health-summaries:
+    get:
+      tags: [health-summaries]
+      summary: 档案首页健康问题总结
+      description: |
+        按 updated_at 倒序返回当前用户总结；每条带 items（sort_order 升序）。
+        列表为空返回 items=[]，不要 404。
+      responses:
+        '200':
+          description: 总结列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthSummaryListResponse'
+
+  /health-reports:
+    get:
+      tags: [health-reports]
+      summary: 体检报告列表（时间轴一半）
+      description: |
+        只返回体检。前端会与 GET /archives 合并后按日期倒序画时间轴。
+        不要返回 findings / full_text / glossary。
+        ORDER BY exam_date DESC, created_at DESC。
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          description: 前端展示页传 100
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 分页列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReportListResponse'
+
+  /health-reports/{report_id}:
+    get:
+      tags: [health-reports]
+      summary: 体检报告详情
+      description: |
+        findings 按 sort_order 升序。
+        full_text 从 health_reports.raw_payload.full_text 取出，没有则 null。
+        glossary 请内嵌返回（report_glossaries，enabled=1）。
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: 详情（异常项 + 完整正文 + 术语）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReportDetail'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /report-glossaries:
+    get:
+      tags: [health-reports]
+      summary: 全局体检术语（可选）
+      description: 前端展示页不调用；优先在报告详情内嵌 glossary。
+      responses:
+        '200':
+          description: 术语列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportGlossaryListResponse'
+
   /archives/ocr:
     post:
       tags: [archives]
@@ -313,7 +394,12 @@ paths:
   /archives:
     get:
       tags: [archives]
-      summary: 档案列表
+      summary: 就诊单列表（时间轴另一半）
+      description: |
+        只返回就诊单。前端会与 GET /health-reports 合并后按日期倒序画时间轴。
+        卡片使用 diagnosis / medicine / visit_date / visit_no。
+        ORDER BY visit_date DESC, created_at DESC。
+        q 前端展示页不传，可暂缓。
       parameters:
         - name: q
           in: query
@@ -327,6 +413,7 @@ paths:
             default: 1
         - name: page_size
           in: query
+          description: 前端展示页传 100
           schema:
             type: integer
             minimum: 1
@@ -359,7 +446,8 @@ paths:
   /archives/{archive_id}:
     get:
       tags: [archives]
-      summary: 档案详情
+      summary: 就诊单详情
+      description: 完整报告 Tab 使用 raw_ocr_text；校验所属用户。
       parameters:
         - $ref: '#/components/parameters/ArchiveId'
       responses:
@@ -540,6 +628,12 @@ components:
         type: string
     ArchiveId:
       name: archive_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ReportId:
+      name: report_id
       in: path
       required: true
       schema:
@@ -778,9 +872,155 @@ components:
         disclaimer:
           type: string
 
+    RiskLevel:
+      type: string
+      enum: [low, medium, high]
+      nullable: true
+
+    HealthSummaryItem:
+      type: object
+      required: [id, content, sort_order]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        severity:
+          $ref: '#/components/schemas/RiskLevel'
+        sort_order:
+          type: integer
+
+    HealthSummary:
+      type: object
+      required: [id, title, summary_text, items, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        exam_date:
+          type: string
+          format: date
+          nullable: true
+        exam_no:
+          type: string
+          nullable: true
+        summary_text:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthSummaryItem'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    HealthSummaryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthSummary'
+
+    HealthReportListItem:
+      type: object
+      required: [id, patient_name, exam_date, org_name, voucher_no, report_type]
+      properties:
+        id:
+          type: string
+        patient_name:
+          type: string
+        exam_date:
+          type: string
+          format: date
+        org_name:
+          type: string
+        voucher_no:
+          type: string
+        report_type:
+          type: string
+          example: 体检报告
+
+    HealthReportListResponse:
+      type: object
+      required: [items, total, page, page_size]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/HealthReportListItem'
+        total:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+
+    HealthReportFinding:
+      type: object
+      required: [id, title, suggestion, sort_order]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        suggestion:
+          type: string
+        risk_level:
+          $ref: '#/components/schemas/RiskLevel'
+        sort_order:
+          type: integer
+
+    ReportGlossaryItem:
+      type: object
+      required: [id, term, definition, sort_order]
+      properties:
+        id:
+          type: string
+        term:
+          type: string
+        definition:
+          type: string
+        sort_order:
+          type: integer
+
+    ReportGlossaryListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportGlossaryItem'
+
+    HealthReportDetail:
+      allOf:
+        - $ref: '#/components/schemas/HealthReportListItem'
+        - type: object
+          required: [findings]
+          properties:
+            findings:
+              type: array
+              items:
+                $ref: '#/components/schemas/HealthReportFinding'
+            full_text:
+              type: string
+              nullable: true
+              description: 从 health_reports.raw_payload.full_text 取出；没有则 null
+            glossary:
+              type: array
+              items:
+                $ref: '#/components/schemas/ReportGlossaryItem'
+              description: 请内嵌返回；前端展示页不另调 /report-glossaries
+
     OcrResult:
       type: object
-      required: [diagnosis, medicine, visit_date, raw_ocr_text]
+      required: [diagnosis, medicine, visit_date, visit_no, raw_ocr_text]
       properties:
         diagnosis:
           type: string
@@ -789,12 +1029,15 @@ components:
         visit_date:
           type: string
           format: date
+        visit_no:
+          type: string
+          description: 就诊号/门诊号
         raw_ocr_text:
           type: string
 
     ArchiveRecord:
       type: object
-      required: [id, diagnosis, medicine, visit_date, created_at, updated_at]
+      required: [id, diagnosis, medicine, visit_date, visit_no, created_at, updated_at]
       properties:
         id:
           type: string
@@ -805,10 +1048,16 @@ components:
         visit_date:
           type: string
           format: date
+        visit_no:
+          type: string
+          description: 就诊号/门诊号，用户维度业务唯一标识
         raw_ocr_text:
           type: string
+          nullable: true
+          description: 详情「完整报告」使用；没有则 null
         image_url:
           type: string
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -833,7 +1082,7 @@ components:
 
     CreateArchiveRequest:
       type: object
-      required: [diagnosis, medicine, visit_date]
+      required: [diagnosis, medicine, visit_date, visit_no]
       properties:
         diagnosis:
           type: string
@@ -842,6 +1091,8 @@ components:
         visit_date:
           type: string
           format: date
+        visit_no:
+          type: string
         raw_ocr_text:
           type: string
         image_url:
@@ -857,6 +1108,8 @@ components:
         visit_date:
           type: string
           format: date
+        visit_no:
+          type: string
 
     ShareArchiveRequest:
       type: object

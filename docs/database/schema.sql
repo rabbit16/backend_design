@@ -194,19 +194,25 @@ CREATE TABLE IF NOT EXISTS medical_archives (
     diagnosis      TEXT         NOT NULL COMMENT '诊断',
     medicine       TEXT         NOT NULL COMMENT '用药',
     visit_date     DATE         NOT NULL COMMENT '就诊/检查日期',
+    visit_no       VARCHAR(64)  NOT NULL COMMENT '就诊号/门诊号',
     raw_ocr_text   TEXT         NULL,
     image_media_id CHAR(36)     NULL,
     source         VARCHAR(16)  NULL COMMENT 'camera | album',
     created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     deleted_at     DATETIME(6)  NULL,
+    -- MySQL 无部分唯一索引：用生成列模拟「未删除时 user_id+visit_no 唯一」
+    active_visit_no CHAR(64)    GENERATED ALWAYS AS (
+        IF(deleted_at IS NULL, visit_no, NULL)
+    ) STORED,
     PRIMARY KEY (id),
     KEY idx_medical_archives_user_date (user_id, visit_date),
+    UNIQUE KEY uq_medical_archives_user_active_visit (user_id, active_visit_no),
     CONSTRAINT fk_medical_archives_user FOREIGN KEY (user_id) REFERENCES users (id),
     CONSTRAINT fk_medical_archives_image FOREIGN KEY (image_media_id) REFERENCES media_files (id),
     CONSTRAINT ck_archive_source CHECK (source IS NULL OR source IN ('camera', 'album'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='就诊单档案：POST /archives/ocr、CRUD /archives';
+  COMMENT='就诊单档案：GET/POST /archives，时间轴卡片用 diagnosis/medicine/visit_date/visit_no';
 
 CREATE TABLE IF NOT EXISTS archive_ocr_jobs (
     id             CHAR(36)     NOT NULL,
@@ -216,6 +222,7 @@ CREATE TABLE IF NOT EXISTS archive_ocr_jobs (
     diagnosis      TEXT         NULL,
     medicine       TEXT         NULL,
     visit_date     DATE         NULL,
+    visit_no       VARCHAR(64)  NULL COMMENT '识别出的就诊号',
     raw_ocr_text   TEXT         NULL,
     status         VARCHAR(16)  NOT NULL DEFAULT 'succeeded' COMMENT 'pending | succeeded | failed',
     created_at     DATETIME(6)  NOT NULL DEFAULT CURRENT_TIMESTAMP(6),

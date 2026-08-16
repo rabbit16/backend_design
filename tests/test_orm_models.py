@@ -95,6 +95,7 @@ async def test_multi_turn_qa_session(session: AsyncSession) -> None:
         diagnosis="支气管炎倾向",
         medicine="止咳药",
         visit_date=date(2026, 7, 27),
+        visit_no="MZ202607270018",
         source="album",
     )
     session.add_all([user, qa, archive])
