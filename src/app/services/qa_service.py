@@ -10,12 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.db.models.qa import QaMessage, QaSession
-from app.gateways.base import AIGateway
-from app.gateways.registry import create_gateway
-from app.schemas.openai_chat import (
+from src.app.core.config import get_settings
+from src.app.core.exceptions import AppError
+from src.app.db.models.qa import QaMessage, QaSession
+from src.app.gateways.base import AIGateway
+from src.app.gateways.registry import create_gateway
+from src.app.schemas.openai_chat import (
     AudioFormat,
     ChatCompletionRequest,
     ChatMessage,
@@ -23,9 +23,9 @@ from app.schemas.openai_chat import (
     InputAudioContentPart,
     TextContentPart,
 )
-from app.schemas.qa import TextAskResponse
-from app.services.context_store import QaContextStore
-from app.utils.ids import new_uuid
+from src.app.schemas.qa import TextAskResponse
+from src.app.services.context_store import QaContextStore
+from src.app.utils.ids import new_uuid
 
 SENIOR_SYSTEM_PROMPT = (
     "你是适老化语音问答助手。请用简短、清楚、口语化的中文回答老人的问题，"

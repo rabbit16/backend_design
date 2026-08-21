@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.gateways.base import AIGateway
-from app.repositories.chat_message_repository import ChatMessageRepository
-from app.schemas.chat import ChatRequest, ChatResponse
+from src.app.gateways.base import AIGateway
+from src.app.repositories.chat_message_repository import ChatMessageRepository
+from src.app.schemas.chat import ChatRequest, ChatResponse
 
 
 class ChatService:

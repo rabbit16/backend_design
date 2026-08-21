@@ -1,9 +1,9 @@
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.core.logging import get_logger
-from app.gateways.ai_gateway import EchoAIGateway, ReverseEchoAIGateway
-from app.gateways.base import AIGateway
-from app.gateways.openai_compatible import OpenAICompatibleGateway
+from src.app.core.config import get_settings
+from src.app.core.exceptions import AppError
+from src.app.core.logging import get_logger
+from src.app.gateways.ai_gateway import EchoAIGateway, ReverseEchoAIGateway
+from src.app.gateways.base import AIGateway
+from src.app.gateways.openai_compatible import OpenAICompatibleGateway
 
 logger = get_logger(__name__)
 

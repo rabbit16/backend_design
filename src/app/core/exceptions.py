@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from app.core.logging import get_logger
+from src.app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

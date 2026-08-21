@@ -7,17 +7,17 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from app.schemas.openai_chat import (
+from src.app.main import create_app
+from src.app.schemas.openai_chat import (
     ChatCompletionRequest,
     ChatMessage,
     InputAudio,
     InputAudioContentPart,
     TextContentPart,
 )
-from app.security.jwt import clear_revoked_sessions
-from app.services.context_store import clear_context_store
-from app.services.sms_service import clear_sms_store
+from src.app.security.jwt import clear_revoked_sessions
+from src.app.services.context_store import clear_context_store
+from src.app.services.sms_service import clear_sms_store
 
 
 def _auth_headers(client: TestClient, phone: str = "13100132001") -> dict[str, str]:

@@ -1,8 +1,8 @@
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from app.core.logging import get_logger
-from app.schemas.chat import WebSocketChatMessage
+from src.app.core.logging import get_logger
+from src.app.schemas.chat import WebSocketChatMessage
 
 logger = get_logger(__name__)
 

@@ -11,10 +11,10 @@ import httpx
 from openai import APIError, APIStatusError, AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk as SdkChatCompletionChunk
 
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.core.logging import get_logger
-from app.schemas.openai_chat import (
+from src.app.core.config import get_settings
+from src.app.core.exceptions import AppError
+from src.app.core.logging import get_logger
+from src.app.schemas.openai_chat import (
     ChatCompletionChoice,
     ChatCompletionChunk,
     ChatCompletionChunkChoice,
@@ -24,7 +24,7 @@ from app.schemas.openai_chat import (
     ChatCompletionUsage,
     ChatMessage,
 )
-from app.utils.ids import new_request_id
+from src.app.utils.ids import new_request_id
 
 logger = get_logger(__name__)
 
@@ -157,6 +157,8 @@ class OpenAICompatibleGateway:
             kwargs["modalities"] = request.modalities
         if request.audio is not None:
             kwargs["audio"] = request.audio
+        if request.response_format is not None:
+            kwargs["response_format"] = request.response_format
         if request.extra:
             kwargs.update(request.extra)
         return kwargs

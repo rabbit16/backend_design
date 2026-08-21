@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from fastapi import WebSocket
 
-from app.core.exceptions import AppError
+from src.app.core.exceptions import AppError
 
 
 class ConnectionManager:

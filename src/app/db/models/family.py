@@ -6,12 +6,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, SoftDeleteMixin, TimestampMixin
-from app.utils.ids import new_uuid
+from src.app.db.base import Base, SoftDeleteMixin, TimestampMixin
+from src.app.utils.ids import new_uuid
 
 if TYPE_CHECKING:
-    from app.db.models.archive import ArchiveShare
-    from app.db.models.user import User
+    from src.app.db.models.archive import ArchiveShare
+    from src.app.db.models.user import User
 
 
 class FamilyContact(TimestampMixin, SoftDeleteMixin, Base):

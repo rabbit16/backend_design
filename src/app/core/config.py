@@ -30,8 +30,18 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     # 语音输入 → 文本输出（OpenAI audio chat 模型）
     openai_audio_model: str = "gpt-audio"
+    # 视觉 OCR；空则回退 openai_model（需支持 image_url，如 gpt-4o-mini）
+    openai_vision_model: str = ""
     openai_temperature: float = 0.7
     openai_max_tokens: int = 1024
+    # 档案 OCR：prompt 名对应 app/prompts/templates/{name}.json，可被路径覆盖
+    ocr_prompt_name: str = "archive_ocr"
+    ocr_prompt_path: str = ""
+    ocr_prompt_dir: str = ""
+    ocr_max_image_bytes: int = 10 * 1024 * 1024
+    ocr_image_detail: Literal["auto", "low", "high"] = "high"
+    ocr_temperature: float = 0.0
+    ocr_max_tokens: int = 4096
     # 可选：显式 HTTP 代理，如 http://127.0.0.1:7890；空则跟随环境变量
     openai_http_proxy: str = ""
 

@@ -2,9 +2,9 @@
 
 import pytest
 
-from app.gateways.ai_gateway import EchoAIGateway
-from app.schemas.chat import ChatRequest
-from app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
+from src.app.gateways.ai_gateway import EchoAIGateway
+from src.app.schemas.chat import ChatRequest
+from src.app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
 
 
 @pytest.mark.asyncio

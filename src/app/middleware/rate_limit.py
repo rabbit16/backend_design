@@ -7,8 +7,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from app.cache.redis import get_redis
-from app.core.config import Settings
+from src.app.cache.redis import get_redis
+from src.app.core.config import Settings
 
 
 @dataclass(frozen=True)

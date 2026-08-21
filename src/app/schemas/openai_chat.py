@@ -1,4 +1,4 @@
-"""OpenAI Chat Completions 兼容协议（文本 + 多模态音频）。"""
+"""OpenAI Chat Completions 兼容协议（文本 + 多模态音频/图像）。"""
 
 from __future__ import annotations
 
@@ -8,11 +8,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ChatRole = Literal["system", "user", "assistant", "tool"]
 AudioFormat = Literal["wav", "mp3"]
+ImageDetail = Literal["auto", "low", "high"]
 
 
 class InputAudio(BaseModel):
     data: str = Field(min_length=1, description="base64 音频")
     format: AudioFormat = "wav"
+
+
+class ImageUrl(BaseModel):
+    """OpenAI vision `image_url` 对象。url 可为 https 或 data:image/...;base64,..."""
+
+    url: str = Field(min_length=1)
+    detail: ImageDetail | None = None
 
 
 class TextContentPart(BaseModel):
@@ -25,7 +33,12 @@ class InputAudioContentPart(BaseModel):
     input_audio: InputAudio
 
 
-ContentPart = TextContentPart | InputAudioContentPart
+class ImageUrlContentPart(BaseModel):
+    type: Literal["image_url"] = "image_url"
+    image_url: ImageUrl
+
+
+ContentPart = TextContentPart | InputAudioContentPart | ImageUrlContentPart
 
 
 def _parts_to_text(parts: list[Any]) -> str:
@@ -86,6 +99,8 @@ class ChatCompletionRequest(BaseModel):
     # 音频模型输出模态；语音提问默认只要文本流
     modalities: list[Literal["text", "audio"]] | None = None
     audio: dict[str, Any] | None = None
+    # OpenAI response_format，如 {"type": "json_object"} 或 json_schema
+    response_format: dict[str, Any] | None = None
     # 透传给上游的额外字段
     extra: dict[str, Any] = Field(default_factory=dict)
 

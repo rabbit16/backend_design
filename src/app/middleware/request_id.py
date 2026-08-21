@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.utils.ids import new_request_id
+from src.app.utils.ids import new_request_id
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):

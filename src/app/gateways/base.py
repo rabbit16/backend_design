@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Protocol
 
-from app.schemas.openai_chat import ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse
+from src.app.schemas.openai_chat import ChatCompletionChunk, ChatCompletionRequest, ChatCompletionResponse
 
 
 class AIGateway(Protocol):

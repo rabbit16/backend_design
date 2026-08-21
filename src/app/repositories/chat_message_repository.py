@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models.chat_message import ChatMessage
+from src.app.db.models.chat_message import ChatMessage
 
 
 class ChatMessageRepository:

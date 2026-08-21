@@ -6,7 +6,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
-from app.core.config import Settings
+from src.app.core.config import Settings
 
 
 def configure_tracing(app: FastAPI, settings: Settings) -> None:

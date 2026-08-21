@@ -3,15 +3,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_session
-from app.schemas.health_profile import (
+from src.app.db.session import get_session
+from src.app.schemas.health_profile import (
     GlossaryListResponse,
     HealthReportDetail,
     HealthReportListResponse,
     HealthSummaryListResponse,
 )
-from app.security.jwt import get_current_subject
-from app.services.health_profile_service import HealthProfileService
+from src.app.security.jwt import get_current_subject
+from src.app.services.health_profile_service import HealthProfileService
 
 router = APIRouter()
 

@@ -4,20 +4,20 @@ from datetime import date
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.models.family import FamilyContact
-from app.db.models.health import (
+from src.app.db.models.family import FamilyContact
+from src.app.db.models.health import (
     HealthReport,
     HealthReportFinding,
     HealthSummary,
     HealthSummaryItem,
     ReportGlossary,
 )
-from app.db.models.user import User
-from app.db.session import AsyncSessionFactory
-from app.main import create_app
-from app.security.jwt import clear_revoked_sessions
-from app.services.sms_service import clear_sms_store
-from app.utils.ids import new_uuid
+from src.app.db.models.user import User
+from src.app.db.session import AsyncSessionFactory
+from src.app.main import create_app
+from src.app.security.jwt import clear_revoked_sessions
+from src.app.services.sms_service import clear_sms_store
+from src.app.utils.ids import new_uuid
 
 
 def _auth_headers(client: TestClient, phone: str = "13200132000") -> dict[str, str]:
@@ -58,13 +58,37 @@ def test_archives_crud_and_ocr() -> None:
         )
         assert ocr.status_code == 200, ocr.text
         ocr_body = ocr.json()
+        assert ocr_body["document_type"] == "visit"
+        assert ocr_body["id"]
         assert ocr_body["diagnosis"]
         assert ocr_body["medicine"]
         assert ocr_body["visit_date"]
         assert ocr_body["visit_no"]
         assert ocr_body["raw_ocr_text"]
+        assert "支气管炎" in ocr_body["diagnosis"]
+        archive_id = ocr_body["id"]
 
-        created = client.post(
+        empty = client.post(
+            "/api/v1/archives/ocr",
+            headers=headers,
+            files={"file": ("empty.jpg", b"", "image/jpeg")},
+            data={"source": "album"},
+        )
+        assert empty.status_code == 400
+        assert empty.json()["code"] == "empty_file"
+
+        listed = client.get("/api/v1/archives?page=1&page_size=100", headers=headers)
+        assert listed.status_code == 200
+        body = listed.json()
+        assert body["total"] >= 1
+        assert body["page"] == 1
+        assert body["page_size"] == 100
+        item = next(i for i in body["items"] if i["id"] == archive_id)
+        assert item["visit_no"] == ocr_body["visit_no"]
+        assert item["visit_date"] == ocr_body["visit_date"]
+        assert item["diagnosis"] == ocr_body["diagnosis"]
+
+        dup = client.post(
             "/api/v1/archives",
             headers=headers,
             json={
@@ -76,23 +100,8 @@ def test_archives_crud_and_ocr() -> None:
                 "source": "camera",
             },
         )
-        assert created.status_code == 201, created.text
-        archive = created.json()
-        archive_id = archive["id"]
-        assert archive["diagnosis"] == ocr_body["diagnosis"]
-        assert archive["visit_no"] == ocr_body["visit_no"]
-        assert archive["created_at"].endswith("Z")
-        assert archive["updated_at"].endswith("Z")
-
-        listed = client.get("/api/v1/archives?page=1&page_size=100", headers=headers)
-        assert listed.status_code == 200
-        body = listed.json()
-        assert body["total"] >= 1
-        assert body["page"] == 1
-        assert body["page_size"] == 100
-        item = next(i for i in body["items"] if i["id"] == archive_id)
-        assert item["visit_no"] == ocr_body["visit_no"]
-        assert item["visit_date"] == ocr_body["visit_date"]
+        assert dup.status_code == 409
+        assert dup.json()["code"] == "visit_no_conflict"
 
         patched = client.patch(
             f"/api/v1/archives/{archive_id}",
@@ -120,6 +129,70 @@ def test_archives_crud_and_ocr() -> None:
         missing = client.get(f"/api/v1/archives/{archive_id}", headers=headers)
         assert missing.status_code == 404
         assert missing.json()["code"] == "archive_not_found"
+
+
+def test_ocr_exam_saves_health_report() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from src.app.ocr.parser import ExtractedDocument
+    from src.app.schemas.archive import OcrFinding
+
+    phone = "13200132011"
+    extracted = ExtractedDocument(
+        document_type="exam",
+        raw_ocr_text="瑞慈体检全文",
+        diagnosis="体重过低",
+        medicine="见体检建议",
+        visit_date=date(2025, 11, 3),
+        visit_no="312101033225",
+        patient_name="毕小雪",
+        exam_date=date(2025, 11, 3),
+        org_name="瑞慈体检上海静安机构",
+        voucher_no="312101033225",
+        report_type="体检报告",
+        findings=[
+            OcrFinding(
+                title="体重过低 BMI 18.2",
+                suggestion="加强营养，适量运动",
+                risk_level="medium",
+                sort_order=0,
+            )
+        ],
+    )
+    with _client() as client:
+        headers = _auth_headers(client, phone)
+        with patch(
+            "src.app.services.archive_service.VisionOcrExtractor.extract",
+            AsyncMock(return_value=extracted),
+        ):
+            ocr = client.post(
+                "/api/v1/archives/ocr",
+                headers=headers,
+                files={"file": ("exam.jpg", b"fake-image-bytes", "image/jpeg")},
+                data={"source": "album"},
+            )
+        assert ocr.status_code == 200, ocr.text
+        body = ocr.json()
+        assert body["document_type"] == "exam"
+        assert body["patient_name"] == "毕小雪"
+        assert body["org_name"] == "瑞慈体检上海静安机构"
+        assert body["voucher_no"] == "312101033225"
+        assert body["findings"][0]["risk_level"] == "medium"
+        report_id = body["id"]
+
+        archives = client.get("/api/v1/archives", headers=headers)
+        assert archives.json()["items"] == []
+
+        reports = client.get("/api/v1/health-reports?page=1&page_size=100", headers=headers)
+        assert reports.status_code == 200
+        assert any(i["id"] == report_id for i in reports.json()["items"])
+
+        detail = client.get(f"/api/v1/health-reports/{report_id}", headers=headers)
+        assert detail.status_code == 200, detail.text
+        report = detail.json()
+        assert report["patient_name"] == "毕小雪"
+        assert report["full_text"] == "瑞慈体检全文"
+        assert report["findings"][0]["title"] == "体重过低 BMI 18.2"
 
 
 def test_archive_visit_no_unique_per_user() -> None:

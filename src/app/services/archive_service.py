@@ -1,17 +1,23 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import AppError
-from app.db.models.archive import ArchiveExport, ArchiveOcrJob, ArchiveShare, MedicalArchive
-from app.db.models.family import FamilyContact
-from app.db.models.media import MediaFile
-from app.schemas.archive import (
+from src.app.core.config import get_settings
+from src.app.core.exceptions import AppError
+from src.app.db.models.archive import ArchiveExport, ArchiveOcrJob, ArchiveShare, MedicalArchive
+from src.app.db.models.family import FamilyContact
+from src.app.db.models.media import MediaFile
+from src.app.gateways.base import AIGateway
+from src.app.gateways.registry import create_gateway
+from src.app.ocr.extractor import VisionOcrExtractor
+from src.app.ocr.image import sniff_image_mime, validate_image_bytes
+from src.app.ocr.parser import ExtractedDocument
+from src.app.schemas.archive import (
     ArchiveListResponse,
     ArchiveRecord,
     CreateArchiveRequest,
@@ -20,15 +26,26 @@ from app.schemas.archive import (
     ShareArchiveResponse,
     UpdateArchiveRequest,
 )
-from app.utils.ids import new_uuid
-from app.utils.timefmt import fmt_utc
+from src.app.services.health_profile_service import HealthProfileService
+from src.app.utils.ids import new_uuid
+from src.app.utils.timefmt import fmt_utc
 
 EXPORT_TTL_SECONDS = 600
 
 
 class ArchiveService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        gateway: AIGateway | None = None,
+        ocr_extractor: VisionOcrExtractor | None = None,
+        *,
+        owns_gateway: bool = False,
+    ) -> None:
         self.session = session
+        self.gateway = gateway
+        self._ocr_extractor = ocr_extractor
+        self.owns_gateway = owns_gateway
 
     def _to_record(self, row: MedicalArchive) -> ArchiveRecord:
         image_url = None
@@ -118,13 +135,14 @@ class ArchiveService:
     ) -> OcrResult:
         if source not in {"camera", "album"}:
             raise AppError("source 必须是 camera 或 album", code="invalid_source", status_code=422)
-        if not file_bytes:
-            raise AppError("图片不能为空", code="empty_file", status_code=400)
+
+        settings = get_settings()
+        validate_image_bytes(file_bytes, max_bytes=settings.ocr_max_image_bytes)
+        mime = sniff_image_mime(file_bytes, filename=filename, content_type=content_type)
 
         ext = "jpg"
         if filename and "." in filename:
             ext = filename.rsplit(".", 1)[-1].lower()[:8] or "jpg"
-        mime = content_type or "image/jpeg"
         storage_key = f"ocr/{user_id}/{new_uuid()}.{ext}"
         media = await self._ensure_image_media(
             user_id,
@@ -133,36 +151,101 @@ class ArchiveService:
             size_bytes=len(file_bytes),
         )
 
-        # 暂无真实 OCR：落中间态 job，返回可编辑的占位结果（便于联调）
-        today = date.today()
-        diagnosis = "支气管炎倾向，建议复查"
-        medicine = "按医嘱服用止咳药，注意饮水"
-        visit_no = f"MZ{today.strftime('%Y%m%d')}{new_uuid().replace('-', '')[:6].upper()}"
-        raw_text = (
-            f"[stub-ocr] file={filename or 'upload'} bytes={len(file_bytes)}\n"
-            f"诊断：{diagnosis}\n用药：{medicine}\n就诊日：{today.isoformat()}\n就诊号：{visit_no}"
-        )
         job = ArchiveOcrJob(
             id=new_uuid(),
             user_id=user_id,
             image_media_id=media.id if media else None,
             source=source,
-            diagnosis=diagnosis,
-            medicine=medicine,
-            visit_date=today,
-            visit_no=visit_no,
-            raw_ocr_text=raw_text,
-            status="succeeded",
+            status="pending",
         )
         self.session.add(job)
-        await self.session.commit()
-        return OcrResult(
-            diagnosis=diagnosis,
-            medicine=medicine,
-            visit_date=today,
+        await self.session.flush()
+
+        gateway = self.gateway
+        owns = self.owns_gateway
+        if self._ocr_extractor is not None:
+            extractor = self._ocr_extractor
+        else:
+            if gateway is None:
+                gateway = create_gateway()
+                owns = True
+            extractor = VisionOcrExtractor(gateway)
+
+        try:
+            extracted = await extractor.extract(
+                file_bytes,
+                source=source,
+                filename=filename,
+                content_type=content_type,
+                user_id=user_id,
+            )
+        except Exception:
+            job.status = "failed"
+            await self.session.commit()
+            raise
+        else:
+            job.diagnosis = extracted.diagnosis
+            job.medicine = extracted.medicine
+            job.visit_date = extracted.visit_date
+            job.visit_no = extracted.visit_no
+            job.raw_ocr_text = extracted.raw_ocr_text
+            job.status = "succeeded"
+            try:
+                result = await self._persist_extracted(
+                    user_id,
+                    extracted,
+                    source=source,
+                    image_media_id=media.id if media else None,
+                )
+            except Exception:
+                await self.session.commit()
+                raise
+            await self.session.commit()
+            return result
+        finally:
+            if owns and gateway is not None:
+                await gateway.close()
+
+    async def _persist_extracted(
+        self,
+        user_id: str,
+        extracted: ExtractedDocument,
+        *,
+        source: str,
+        image_media_id: str | None,
+    ) -> OcrResult:
+        if extracted.document_type == "exam":
+            report = await HealthProfileService(self.session).create_report(
+                user_id,
+                patient_name=extracted.patient_name,
+                exam_date=extracted.exam_date or extracted.visit_date,
+                org_name=extracted.org_name,
+                voucher_no=extracted.voucher_no or extracted.visit_no,
+                report_type=extracted.report_type,
+                full_text=extracted.raw_ocr_text,
+                findings=extracted.findings,
+                extra_payload={"source": source, "image_media_id": image_media_id},
+            )
+            return extracted.to_ocr_result(report.id)
+
+        visit_no = await self._ensure_unique_visit_no(user_id, extracted.visit_no)
+        row = MedicalArchive(
+            id=new_uuid(),
+            user_id=user_id,
+            diagnosis=extracted.diagnosis,
+            medicine=extracted.medicine,
+            visit_date=extracted.visit_date,
             visit_no=visit_no,
-            raw_ocr_text=raw_text,
+            raw_ocr_text=extracted.raw_ocr_text,
+            image_media_id=image_media_id,
+            source=source,
         )
+        self.session.add(row)
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            raise AppError("该就诊号已存在", code="visit_no_conflict", status_code=409) from exc
+        return extracted.to_ocr_result(row.id)
 
     async def list_archives(
         self,

@@ -4,14 +4,32 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ArchiveSource = Literal["camera", "album"]
+OcrDocumentType = Literal["visit", "exam"]
+OcrRiskLevel = Literal["low", "medium", "high"]
+
+
+class OcrFinding(BaseModel):
+    title: str
+    suggestion: str
+    risk_level: OcrRiskLevel | None = None
+    sort_order: int = 0
 
 
 class OcrResult(BaseModel):
+    """OCR 结果；识别成功后已写入对应表。"""
+
+    document_type: OcrDocumentType = "visit"
+    id: str | None = None
     diagnosis: str
     medicine: str
     visit_date: date
     visit_no: str
     raw_ocr_text: str
+    patient_name: str | None = None
+    org_name: str | None = None
+    voucher_no: str | None = None
+    report_type: str | None = None
+    findings: list[OcrFinding] = Field(default_factory=list)
 
 
 class ArchiveRecord(BaseModel):

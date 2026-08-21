@@ -3,15 +3,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
-from app.db.session import get_session
-from app.gateways.base import AIGateway
-from app.gateways.providers import list_providers
-from app.gateways.registry import create_gateway, get_gateway
-from app.schemas.chat import ChatRequest, ChatResponse
-from app.schemas.response import ApiResponse, ok
-from app.security.jwt import get_current_subject
-from app.services.chat_service import ChatService
+from src.app.core.config import get_settings
+from src.app.db.session import get_session
+from src.app.gateways.base import AIGateway
+from src.app.gateways.providers import list_providers
+from src.app.gateways.registry import create_gateway, get_gateway
+from src.app.schemas.chat import ChatRequest, ChatResponse
+from src.app.schemas.response import ApiResponse, ok
+from src.app.security.jwt import get_current_subject
+from src.app.services.chat_service import ChatService
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

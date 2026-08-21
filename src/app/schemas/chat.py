@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
+from src.app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
 
 
 class ChatRequest(BaseModel):

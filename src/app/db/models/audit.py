@@ -6,7 +6,7 @@ from sqlalchemy import BigInteger, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
-from app.db.base import Base, CreatedAtMixin
+from src.app.db.base import Base, CreatedAtMixin
 
 
 class AuditLog(CreatedAtMixin, Base):

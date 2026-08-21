@@ -1,15 +1,15 @@
 from fastapi import FastAPI
 
-from app.api.http import archives
-from app.api.http import auth
-from app.api.http import chat as http_chat
-from app.api.http import health
-from app.api.http import health_profile
-from app.api.http import me
-from app.api.http import qa
-from app.api.http import tasks
-from app.api.ws import chat as ws_chat
-from app.core.config import Settings
+from src.app.api.http import archives
+from src.app.api.http import auth
+from src.app.api.http import chat as http_chat
+from src.app.api.http import health
+from src.app.api.http import health_profile
+from src.app.api.http import me
+from src.app.api.http import qa
+from src.app.api.http import tasks
+from src.app.api.ws import chat as ws_chat
+from src.app.core.config import Settings
 
 
 def register_routes(app: FastAPI, settings: Settings) -> None:

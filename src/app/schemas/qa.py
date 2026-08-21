@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.schemas.openai_chat import AudioFormat
+from src.app.schemas.openai_chat import AudioFormat
 
 Lang = Literal["zh", "en"]
 

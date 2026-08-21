@@ -1,8 +1,8 @@
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from app.security.jwt import clear_revoked_sessions
-from app.services.sms_service import clear_sms_store
+from src.app.main import create_app
+from src.app.security.jwt import clear_revoked_sessions
+from src.app.services.sms_service import clear_sms_store
 
 
 def _client() -> TestClient:

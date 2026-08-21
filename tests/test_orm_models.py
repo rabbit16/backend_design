@@ -5,8 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
-from app.db.base import Base
-from app.db.models import (
+from src.app.db.base import Base
+from src.app.db.models import (
     FamilyContact,
     MedicalArchive,
     QaMessage,
@@ -15,7 +15,6 @@ from app.db.models import (
     User,
     UserPreference,
 )
-import app.db.models  # noqa: F401
 
 
 @pytest.fixture

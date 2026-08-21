@@ -54,14 +54,14 @@ mysql -h127.0.0.1 -uroot -p123456 senior_voice < docs/database/schema.sql
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src python scripts/run_dev.py
+PYTHONPATH=. python scripts/run_dev.py
 ```
 
 等价写法：
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=. uvicorn src.app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
 ```
 
 - 默认监听：`http://0.0.0.0:8000`
@@ -85,7 +85,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=src pytest -v
+PYTHONPATH=. pytest -v
 ```
 
 > 单测由 `tests/conftest.py` 强制使用内存 SQLite，不依赖本机 MySQL。
@@ -100,19 +100,19 @@ Alembic 封装在 `scripts/db_migrate.py`，连接串读自 `.env` 的 `DATABASE
 source .venv/bin/activate
 
 # 查看当前版本
-PYTHONPATH=src python scripts/db_migrate.py current
+PYTHONPATH=. python scripts/db_migrate.py current
 
 # 升级到最新（空库 / 已 stamp 后）
-PYTHONPATH=src python scripts/db_migrate.py upgrade
+PYTHONPATH=. python scripts/db_migrate.py upgrade
 
 # 生成迁移并立刻升级（改完 ORM 后常用）
-PYTHONPATH=src python scripts/db_migrate.py migrate -m "describe change"
+PYTHONPATH=. python scripts/db_migrate.py migrate -m "describe change"
 
 # 只生成 revision（不 upgrade）
-PYTHONPATH=src python scripts/db_migrate.py revision -m "add xxx" --autogenerate
+PYTHONPATH=. python scripts/db_migrate.py revision -m "add xxx" --autogenerate
 
 # 回退一版
-PYTHONPATH=src python scripts/db_migrate.py downgrade -1
+PYTHONPATH=. python scripts/db_migrate.py downgrade -1
 ```
 
 ### 3.1 表已经存在时（报 1050 Table already exists）
@@ -124,10 +124,10 @@ PYTHONPATH=src python scripts/db_migrate.py downgrade -1
 source .venv/bin/activate
 
 # 把当前库标记为已是最新结构（不执行任何 CREATE）
-PYTHONPATH=src python scripts/db_migrate.py stamp head
+PYTHONPATH=. python scripts/db_migrate.py stamp head
 
 # 确认
-PYTHONPATH=src python scripts/db_migrate.py current
+PYTHONPATH=. python scripts/db_migrate.py current
 # 应显示：0004_qa_multi_turn (head)
 ```
 
@@ -135,13 +135,13 @@ PYTHONPATH=src python scripts/db_migrate.py current
 
 ```bash
 # 改 ORM → 生成差异并升级
-PYTHONPATH=src python scripts/db_migrate.py migrate -m "your change"
+PYTHONPATH=. python scripts/db_migrate.py migrate -m "your change"
 ```
 
 启动服务：`local` 环境只会 **补缺表**，已有表不会再 CREATE，可直接：
 
 ```bash
-PYTHONPATH=src python scripts/run_dev.py
+PYTHONPATH=. python scripts/run_dev.py
 ```
 
 当前迁移链（节选）：
@@ -248,7 +248,7 @@ PORT=8001
 ```bash
 DATABASE_URL=sqlite+aiosqlite:///./data/app.db \
 PORT=8001 \
-PYTHONPATH=src python scripts/run_dev.py
+PYTHONPATH=. python scripts/run_dev.py
 ```
 
 ### 4.4 改完配置要注意
@@ -277,10 +277,10 @@ PYTHONPATH=src python scripts/run_dev.py
 source .venv/bin/activate
 
 # 启动
-PYTHONPATH=src python scripts/run_dev.py
+PYTHONPATH=. python scripts/run_dev.py
 
 # 迁移升级
-PYTHONPATH=src python scripts/db_migrate.py upgrade
+PYTHONPATH=. python scripts/db_migrate.py upgrade
 
 # 改配置
 $EDITOR .env

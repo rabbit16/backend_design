@@ -22,13 +22,13 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-PYTHONPATH=src python scripts/run_dev.py
+PYTHONPATH=. python scripts/run_dev.py
 ```
 
 或：
 
 ```bash
-PYTHONPATH=src uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+PYTHONPATH=. uvicorn src.app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## 数据库迁移
@@ -53,15 +53,15 @@ DATABASE_URL=mysql+aiomysql://user:password@localhost:3306/app?charset=utf8mb4
 一键生成迁移并升级到最新版本：
 
 ```bash
-PYTHONPATH=src python scripts/db_migrate.py migrate -m "describe change"
+PYTHONPATH=. python scripts/db_migrate.py migrate -m "describe change"
 ```
 
 常用命令：
 
 ```bash
-PYTHONPATH=src python scripts/db_migrate.py upgrade
-PYTHONPATH=src python scripts/db_migrate.py revision -m "add table" --autogenerate
-PYTHONPATH=src python scripts/db_migrate.py downgrade -1
+PYTHONPATH=. python scripts/db_migrate.py upgrade
+PYTHONPATH=. python scripts/db_migrate.py revision -m "add table" --autogenerate
+PYTHONPATH=. python scripts/db_migrate.py downgrade -1
 ```
 
 新增模型时：

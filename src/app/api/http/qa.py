@@ -5,14 +5,14 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AppError
-from app.db.session import get_session
-from app.gateways.base import AIGateway
-from app.gateways.registry import get_gateway
-from app.schemas.openai_chat import AudioFormat
-from app.schemas.qa import AudioAskJsonRequest, ClearContextResponse, TextAskRequest
-from app.security.jwt import get_current_subject
-from app.services.qa_service import (
+from src.app.core.exceptions import AppError
+from src.app.db.session import get_session
+from src.app.gateways.base import AIGateway
+from src.app.gateways.registry import get_gateway
+from src.app.schemas.openai_chat import AudioFormat
+from src.app.schemas.qa import AudioAskJsonRequest, ClearContextResponse, TextAskRequest
+from src.app.security.jwt import get_current_subject
+from src.app.services.qa_service import (
     DEFAULT_AUDIO_PROMPT,
     QaService,
     format_sse,

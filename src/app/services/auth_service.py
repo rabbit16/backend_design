@@ -6,20 +6,20 @@ from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import AppError
-from app.db.models.user import User
-from app.repositories.user_repository import UserRepository
-from app.schemas.auth import (
+from src.app.core.exceptions import AppError
+from src.app.db.models.user import User
+from src.app.repositories.user_repository import UserRepository
+from src.app.schemas.auth import (
     LoginResponse,
     OkResponse,
     SendSmsResponse,
     TokenPair,
     UserProfile,
 )
-from app.security.jwt import create_token_pair, decode_token, revoke_session
-from app.security.password import hash_password, verify_password
-from app.services.sms_service import SmsPurpose, SmsService
-from app.utils.ids import new_user_id
+from src.app.security.jwt import create_token_pair, decode_token, revoke_session
+from src.app.security.password import hash_password, verify_password
+from src.app.services.sms_service import SmsPurpose, SmsService
+from src.app.utils.ids import new_user_id
 
 PHONE_PATTERN = re.compile(r"^1\d{10}$")
 MIN_PASSWORD_LENGTH = 6

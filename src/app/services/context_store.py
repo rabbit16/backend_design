@@ -14,9 +14,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from app.cache.redis import get_redis
-from app.core.config import get_settings
-from app.core.logging import get_logger
+from src.app.cache.redis import get_redis
+from src.app.core.config import get_settings
+from src.app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

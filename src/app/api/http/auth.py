@@ -3,8 +3,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_session
-from app.schemas.auth import (
+from src.app.db.session import get_session
+from src.app.schemas.auth import (
     ChangePasswordRequest,
     LoginResponse,
     OkResponse,
@@ -16,8 +16,8 @@ from app.schemas.auth import (
     SmsLoginRequest,
     TokenPair,
 )
-from app.security.jwt import get_current_session_id, get_current_subject
-from app.services.auth_service import AuthService
+from src.app.security.jwt import get_current_session_id, get_current_subject
+from src.app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

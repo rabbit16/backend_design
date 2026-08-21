@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
-from app.core.config import Settings
-from app.middleware.access_log import AccessLogMiddleware
-from app.middleware.error_handler import ErrorBoundaryMiddleware
-from app.middleware.rate_limit import RateLimitMiddleware
-from app.middleware.request_id import RequestIdMiddleware
+from src.app.core.config import Settings
+from src.app.middleware.access_log import AccessLogMiddleware
+from src.app.middleware.error_handler import ErrorBoundaryMiddleware
+from src.app.middleware.rate_limit import RateLimitMiddleware
+from src.app.middleware.request_id import RequestIdMiddleware
 
 
 def register_middlewares(app: FastAPI, settings: Settings) -> None:

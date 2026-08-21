@@ -381,6 +381,7 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 - 日期字段：`YYYY-MM-DD`；时间字段：ISO 8601 UTC
 - 两个列表接口前端用 `Promise.allSettled`：一边失败另一边仍展示
 - **不要**做 `GET /timeline`；**不要**把就诊写入 `health_reports` 或把体检写入 `medical_archives`
+- 拍照 OCR 只调 `POST /archives/ocr`：后端会分类并入库；成功后刷新两个列表即可
 
 `GET /report-glossaries` 前端不调用。术语请内嵌在 `GET /health-reports/{id}` 的 `glossary`。
 
@@ -511,28 +512,114 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 ### 2.4 档案 Archives（就诊单列表 / OCR）
 
-对应表：`medical_archives`、`archive_ocr_jobs`（识别中间态）
+对应表：`medical_archives`、`archive_ocr_jobs`（识别中间态）、体检写入 `health_reports`
 
-展示页只读 `GET /archives`、`GET /archives/{id}`。OCR 写入（`POST /archives/ocr`、`POST /archives`）及推送/导出可后做。
+展示页只读 `GET /archives`、`GET /archives/{id}`。  
+**拍照/相册识别请只调 `POST /archives/ocr`**（后端分类并入库）。`POST /archives` 仅用于用户手工补录就诊单，不要在 OCR 成功后再用同一张单去创建。
 
 #### `POST /archives/ocr`（需登录，`multipart/form-data`）
 
+前端传一张图即可。后端用视觉模型判断类型并**立刻写入对应表**，返回已落库的 `id`。
+
 | 字段 | 说明 |
 |------|------|
-| `file` | 图片 |
+| `file` | 图片，jpg / png / webp / gif，建议不超过 10MB |
 | `source` | `camera` \| `album` |
 
-响应：
+建议超时 **≥ 60s**（识图比普通接口慢）。`config/api.json` 的 `timeoutMs` 若仍是 `30000`，OCR 请求请单独加长。
+
+识别规则：
+
+| `document_type` | 含义 | 写入表 | 返回的 `id` | 之后读哪个接口 |
+|-----------------|------|--------|-------------|----------------|
+| `visit` | 就诊单 / 处方 / 病历 / 出院小结 | `medical_archives` | 就诊单 id | `GET /archives`、`GET /archives/{id}` |
+| `exam` | 体检报告 / 健康体检 | `health_reports` + findings | 体检报告 id | `GET /health-reports`、`GET /health-reports/{id}` |
+
+前端流程：
+
+1. `POST /archives/ocr`（`file` + `source`）
+2. 看 `document_type` + `id` 决定跳转详情或刷新时间轴
+3. **不要**再 `POST /archives` 把本次结果存一遍（同一 `visit_no` / `voucher_no` 会 `409`）
+4. 时间轴仍用 `Promise.allSettled` 拉 `GET /health-reports` + `GET /archives`
+
+响应字段（两种类型同一 JSON 形状；就诊单时体检字段为 `null` / `[]`）：
+
+| 字段 | 就诊单 `visit` | 体检单 `exam` |
+|------|----------------|---------------|
+| `document_type` | `"visit"` | `"exam"` |
+| `id` | 就诊单 id | 体检报告 id |
+| `diagnosis` | 诊断白话 | 首条异常标题（兼容旧字段） |
+| `medicine` | 用药/医嘱白话 | 多为「见体检建议」 |
+| `visit_date` | 就诊日 `YYYY-MM-DD` | 等于 `exam_date` |
+| `visit_no` | 就诊号 | 等于 `voucher_no` |
+| `raw_ocr_text` | 全文 | 全文（详情 `full_text` 同源） |
+| `patient_name` | `null` | 姓名 |
+| `org_name` | `null` | 机构 |
+| `voucher_no` | `null` | 体检凭证号 |
+| `report_type` | `null` | 如「体检报告」 |
+| `findings` | `[]` | 异常项列表 |
+
+就诊单 `200` 示例：
 
 ```json
 {
+  "document_type": "visit",
+  "id": "arc_xxx",
   "diagnosis": "支气管炎倾向，建议复查",
   "medicine": "按医嘱服用止咳药，注意饮水",
   "visit_date": "2026-07-27",
   "visit_no": "MZ202607270018",
-  "raw_ocr_text": "原始 OCR 全文……"
+  "raw_ocr_text": "原始 OCR 全文……",
+  "patient_name": null,
+  "org_name": null,
+  "voucher_no": null,
+  "report_type": null,
+  "findings": []
 }
 ```
+
+体检单 `200` 示例：
+
+```json
+{
+  "document_type": "exam",
+  "id": "hr_xxx",
+  "diagnosis": "体重过低 BMI 18.2",
+  "medicine": "见体检建议",
+  "visit_date": "2025-11-03",
+  "visit_no": "312101033225",
+  "raw_ocr_text": "完整报告正文……",
+  "patient_name": "毕小雪",
+  "org_name": "瑞慈体检上海静安机构",
+  "voucher_no": "312101033225",
+  "report_type": "体检报告",
+  "findings": [
+    {
+      "title": "体重过低 BMI 18.2",
+      "suggestion": "建议平衡膳食，适量运动，定期复查体重。",
+      "risk_level": "medium",
+      "sort_order": 0
+    }
+  ]
+}
+```
+
+`findings[].risk_level`：`low` \| `medium` \| `high`，可 `null`。OCR 返回的 findings **没有** `id`；详情 `GET /health-reports/{id}` 才有 `id`。
+
+错误：
+
+| HTTP | `code` | 何时 |
+|------|--------|------|
+| 400 | `empty_file` | 空文件 |
+| 400 | `image_too_large` | 超过约 10MB |
+| 400 | `unsupported_image_type` | 非 jpg/png/webp/gif |
+| 401 | （未登录） | 缺 token / token 无效 |
+| 409 | `visit_no_conflict` | 该就诊号已存在 |
+| 409 | `voucher_no_conflict` | 该体检凭证号已存在 |
+| 422 | `invalid_source` | `source` 不是 camera/album |
+| 502 | `ocr_invalid_json` / `ocr_empty_response` / `openai_upstream_error` | 模型识别失败 |
+
+`409` 时识别可能已成功但未写入（号冲突）。前端提示「该单已在档案中」并刷新列表即可，不要换号强行再存同一张图。
 
 ---
 
@@ -584,7 +671,8 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 
 #### `POST /archives`（需登录）
 
-保存 OCR 结果到档案。同一用户下 `visit_no` 未删除时唯一。
+**手工补录就诊单**（不是 OCR 成功后的下一步）。同一用户下 `visit_no` 未删除时唯一。  
+不要用来保存体检单。
 
 ```json
 {
@@ -771,7 +859,7 @@ docs/openapi.yaml                        # 已含 health-summaries / health-repo
 | 首页按住说话 | `POST /voice/recognize` → `POST /qa/ask`（识别文本后提问）或显式 `/qa/sessions` |
 | 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
 | 结束当前对话 | `POST /qa/context/clear` |
-| 档案 OCR（写入，可后做） | `POST /archives/ocr`、`POST /archives` |
+| 档案 OCR（拍照/相册） | **只调** `POST /archives/ocr`（`file`+`source`）。`visit`→就诊表，`exam`→体检表；用返回的 `id` 进详情。不要再 `POST /archives` |
 | 档案首页总结 | `GET /health-summaries`（表 `health_summaries` / `health_summary_items`） |
 | 健康档案报告时间轴 | 前端合并 `GET /health-reports` + `GET /archives`（不要单独做 timeline 接口） |
 | 体检详情 | `GET /health-reports/{id}`（`findings` + `full_text` + 内嵌 `glossary`） |

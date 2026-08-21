@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedAtMixin, SoftDeleteMixin
-from app.utils.ids import new_uuid
+from src.app.db.base import Base, CreatedAtMixin, SoftDeleteMixin
+from src.app.utils.ids import new_uuid
 
 if TYPE_CHECKING:
-    from app.db.models.archive import ArchiveExport, ArchiveOcrJob, MedicalArchive
-    from app.db.models.health import HealthReport
-    from app.db.models.qa import QaMessage, VoiceRecognizeJob
-    from app.db.models.user import User
+    from src.app.db.models.archive import ArchiveExport, ArchiveOcrJob, MedicalArchive
+    from src.app.db.models.health import HealthReport
+    from src.app.db.models.qa import QaMessage, VoiceRecognizeJob
+    from src.app.db.models.user import User
 
 
 class MediaFile(CreatedAtMixin, SoftDeleteMixin, Base):

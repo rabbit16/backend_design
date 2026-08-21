@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.schemas.response import ApiResponse, ok
-from app.security.jwt import get_current_subject
-from app.tasks.queue import get_task_queue
+from src.app.schemas.response import ApiResponse, ok
+from src.app.security.jwt import get_current_subject
+from src.app.tasks.queue import get_task_queue
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 

@@ -1,11 +1,11 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from app.connections.manager import get_connection_manager
-from app.connections.websocket import receive_chat_message, safe_send_error, validation_error_message
-from app.core.config import get_settings
-from app.gateways.registry import create_gateway
-from app.schemas.chat import ChatRequest
+from src.app.connections.manager import get_connection_manager
+from src.app.connections.websocket import receive_chat_message, safe_send_error, validation_error_message
+from src.app.core.config import get_settings
+from src.app.gateways.registry import create_gateway
+from src.app.schemas.chat import ChatRequest
 
 router = APIRouter(tags=["websocket-chat"])
 

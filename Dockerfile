@@ -9,7 +9,7 @@ ARG PIP_TRUSTED_HOST=mirrors.ustc.edu.cn
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src \
+    PYTHONPATH=/app \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_INDEX_URL=${PIP_INDEX_URL} \
@@ -48,4 +48,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:${PORT:-8000}/api/v1/health || exit 1
 
-CMD ["sh", "-c", "python scripts/db_migrate.py upgrade && uvicorn app.main:create_app --factory --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1}"]
+CMD ["sh", "-c", "python scripts/db_migrate.py upgrade && uvicorn src.app.main:create_app --factory --host ${HOST:-0.0.0.0} --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1}"]

@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
-from app.utils.ids import new_uuid
+from src.app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
+from src.app.utils.ids import new_uuid
 
 if TYPE_CHECKING:
-    from app.db.models.family import FamilyContact
-    from app.db.models.media import MediaFile
-    from app.db.models.user import User
+    from src.app.db.models.family import FamilyContact
+    from src.app.db.models.media import MediaFile
+    from src.app.db.models.user import User
 
 
 class MedicalArchive(TimestampMixin, SoftDeleteMixin, Base):

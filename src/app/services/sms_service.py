@@ -6,9 +6,9 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from app.core.config import get_settings
-from app.core.exceptions import AppError
-from app.core.logging import get_logger
+from src.app.core.config import get_settings
+from src.app.core.exceptions import AppError
+from src.app.core.logging import get_logger
 
 logger = get_logger(__name__)
 

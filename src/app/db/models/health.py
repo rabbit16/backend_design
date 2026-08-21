@@ -7,12 +7,12 @@ from sqlalchemy import Boolean, CheckConstraint, Date, ForeignKey, Integer, Stri
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
-from app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
-from app.utils.ids import new_uuid
+from src.app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
+from src.app.utils.ids import new_uuid
 
 if TYPE_CHECKING:
-    from app.db.models.media import MediaFile
-    from app.db.models.user import User
+    from src.app.db.models.media import MediaFile
+    from src.app.db.models.user import User
 
 
 class HealthSummary(TimestampMixin, SoftDeleteMixin, Base):

@@ -6,9 +6,9 @@ from __future__ import annotations
 import asyncio
 import sys
 
-from app.core.config import clear_settings_cache, get_settings
-from app.gateways.openai_compatible import OpenAICompatibleGateway
-from app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
+from src.app.core.config import clear_settings_cache, get_settings
+from src.app.gateways.openai_compatible import OpenAICompatibleGateway
+from src.app.schemas.openai_chat import ChatCompletionRequest, ChatMessage
 
 
 async def main() -> int:

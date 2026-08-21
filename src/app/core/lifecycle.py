@@ -5,16 +5,16 @@ from fastapi import FastAPI
 from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError
 
-from app.cache.redis import close_redis, init_redis
-from app.core.config import get_settings
-from app.core.logging import get_logger
-from app.db.base import Base
-from app.db.session import dispose_engine, engine
-from app.gateways.registry import close_gateway_registry, init_gateway_registry
-from app.tasks.queue import init_task_queue
+from src.app.cache.redis import close_redis, init_redis
+from src.app.core.config import get_settings
+from src.app.core.logging import get_logger
+from src.app.db.base import Base
+from src.app.db.session import dispose_engine, engine
+from src.app.gateways.registry import close_gateway_registry, init_gateway_registry
+from src.app.tasks.queue import init_task_queue
 
 # 确保模型注册到 metadata
-import app.db.models  # noqa: F401
+import src.app.db.models  # noqa: F401
 
 logger = get_logger(__name__)
 

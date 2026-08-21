@@ -368,7 +368,9 @@ paths:
   /archives/ocr:
     post:
       tags: [archives]
-      summary: 病历图片 OCR
+      summary: 病历图片 OCR（就诊单或体检单）
+      description: |
+        大模型先判断 document_type：visit 写入 medical_archives，exam 写入 health_reports。
       requestBody:
         required: true
         content:
@@ -385,11 +387,19 @@ paths:
                   enum: [camera, album]
       responses:
         '200':
-          description: OCR 结构化结果
+          description: OCR 结构化结果（已入库）
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/OcrResult'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
 
   /archives:
     get:
@@ -1018,10 +1028,31 @@ components:
                 $ref: '#/components/schemas/ReportGlossaryItem'
               description: 请内嵌返回；前端展示页不另调 /report-glossaries
 
+    OcrFinding:
+      type: object
+      required: [title, suggestion, sort_order]
+      properties:
+        title:
+          type: string
+        suggestion:
+          type: string
+        risk_level:
+          $ref: '#/components/schemas/RiskLevel'
+        sort_order:
+          type: integer
+
     OcrResult:
       type: object
-      required: [diagnosis, medicine, visit_date, visit_no, raw_ocr_text]
+      required: [document_type, diagnosis, medicine, visit_date, visit_no, raw_ocr_text]
       properties:
+        document_type:
+          type: string
+          enum: [visit, exam]
+          description: visit=就诊单（medical_archives）；exam=体检单（health_reports）
+        id:
+          type: string
+          nullable: true
+          description: 已落库记录 id（就诊单 archive id / 体检单 report id）
         diagnosis:
           type: string
         medicine:
@@ -1031,9 +1062,25 @@ components:
           format: date
         visit_no:
           type: string
-          description: 就诊号/门诊号
+          description: 就诊号/门诊号；体检单时等同 voucher_no
         raw_ocr_text:
           type: string
+        patient_name:
+          type: string
+          nullable: true
+        org_name:
+          type: string
+          nullable: true
+        voucher_no:
+          type: string
+          nullable: true
+        report_type:
+          type: string
+          nullable: true
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OcrFinding'
 
     ArchiveRecord:
       type: object

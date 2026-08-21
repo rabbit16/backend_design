@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator
+from datetime import date
 
-from app.schemas.openai_chat import (
+from src.app.schemas.openai_chat import (
     ChatCompletionChoice,
     ChatCompletionChunk,
     ChatCompletionChunkChoice,
@@ -15,8 +17,9 @@ from app.schemas.openai_chat import (
     ChatCompletionResponse,
     ChatCompletionUsage,
     ChatMessage,
+    ImageUrlContentPart,
 )
-from app.utils.ids import new_request_id
+from src.app.utils.ids import new_request_id
 
 
 def _last_user_text(request: ChatCompletionRequest) -> str:
@@ -26,10 +29,50 @@ def _last_user_text(request: ChatCompletionRequest) -> str:
             if text:
                 return text
             if isinstance(msg.content, list):
-                return "[audio]"
+                return "[image]" if _message_has_image(msg) else "[audio]"
     if request.messages:
         return request.messages[-1].text or "[audio]"
     return ""
+
+
+def _message_has_image(msg: ChatMessage) -> bool:
+    if not isinstance(msg.content, list):
+        return False
+    for part in msg.content:
+        if isinstance(part, ImageUrlContentPart) or getattr(part, "type", None) == "image_url":
+            return True
+        if isinstance(part, dict) and part.get("type") == "image_url":
+            return True
+    return False
+
+
+def _has_image(request: ChatCompletionRequest) -> bool:
+    return any(_message_has_image(msg) for msg in request.messages)
+
+
+def _ocr_stub_content() -> str:
+    today = date.today().isoformat()
+    visit_no = f"MZ{today.replace('-', '')}0018"
+    return json.dumps(
+        {
+            "diagnosis": "支气管炎倾向，建议复查",
+            "medicine": "按医嘱服用止咳药，注意饮水",
+            "visit_date": today,
+            "visit_no": visit_no,
+            "document_type": "visit",
+            "raw_ocr_text": (
+                f"诊断：支气管炎倾向，建议复查\n用药：按医嘱服用止咳药，注意饮水\n"
+                f"就诊日期：{today}\n就诊号：{visit_no}"
+            ),
+        },
+        ensure_ascii=False,
+    )
+
+
+def _echo_text(request: ChatCompletionRequest) -> str:
+    if _has_image(request):
+        return _ocr_stub_content()
+    return f"echo: {_last_user_text(request)}"
 
 
 class EchoAIGateway:
@@ -37,7 +80,7 @@ class EchoAIGateway:
 
     async def chat_completions(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         await asyncio.sleep(0)
-        text = f"echo: {_last_user_text(request)}"
+        text = _echo_text(request)
         return ChatCompletionResponse(
             id=f"chatcmpl-{new_request_id()}",
             created=int(time.time()),
@@ -60,7 +103,7 @@ class EchoAIGateway:
     async def chat_completions_stream(
         self, request: ChatCompletionRequest
     ) -> AsyncIterator[ChatCompletionChunk]:
-        text = f"echo: {_last_user_text(request)}"
+        text = _echo_text(request)
         chunk_id = f"chatcmpl-{new_request_id()}"
         created = int(time.time())
         model = request.model or "echo"
@@ -79,7 +122,8 @@ class EchoAIGateway:
             ],
             provider=self.provider,
         )
-        for piece in ["echo", ": ", _last_user_text(request)]:
+        pieces = [text] if _has_image(request) else ["echo", ": ", _last_user_text(request)]
+        for piece in pieces:
             await asyncio.sleep(0)
             yield ChatCompletionChunk(
                 id=chunk_id,
@@ -107,8 +151,6 @@ class EchoAIGateway:
             ],
             provider=self.provider,
         )
-        # 避免未使用变量告警：text 与完整回答一致
-        _ = text
 
     async def close(self) -> None:
         return None

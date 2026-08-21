@@ -1,14 +1,15 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import AppError
-from app.db.models.health import HealthReport, HealthSummary, ReportGlossary
-from app.schemas.health_profile import (
+from src.app.core.exceptions import AppError
+from src.app.db.models.health import HealthReport, HealthReportFinding, HealthSummary, ReportGlossary
+from src.app.schemas.health_profile import (
     GlossaryItemOut,
     GlossaryListResponse,
     HealthReportDetail,
@@ -19,7 +20,9 @@ from app.schemas.health_profile import (
     HealthSummaryListResponse,
     HealthSummaryOut,
 )
-from app.utils.timefmt import fmt_utc
+from src.app.schemas.archive import OcrFinding
+from src.app.utils.ids import new_uuid
+from src.app.utils.timefmt import fmt_utc
 
 
 def _full_text_from_payload(raw: dict[str, Any] | None) -> str | None:
@@ -36,6 +39,71 @@ class HealthProfileService:
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def _ensure_unique_voucher_no(
+        self,
+        user_id: str,
+        voucher_no: str,
+        *,
+        exclude_id: str | None = None,
+    ) -> str:
+        normalized = voucher_no.strip()
+        if not normalized:
+            raise AppError("检查凭证号不能为空", code="invalid_voucher_no", status_code=422)
+        stmt = select(HealthReport.id).where(
+            HealthReport.user_id == user_id,
+            HealthReport.voucher_no == normalized,
+            HealthReport.deleted_at.is_(None),
+        )
+        if exclude_id:
+            stmt = stmt.where(HealthReport.id != exclude_id)
+        existing = (await self.session.execute(stmt.limit(1))).scalar_one_or_none()
+        if existing is not None:
+            raise AppError("该体检凭证号已存在", code="voucher_no_conflict", status_code=409)
+        return normalized
+
+    async def create_report(
+        self,
+        user_id: str,
+        *,
+        patient_name: str,
+        exam_date: date,
+        org_name: str,
+        voucher_no: str,
+        report_type: str = "体检报告",
+        full_text: str | None = None,
+        findings: list[OcrFinding] | None = None,
+        extra_payload: dict[str, Any] | None = None,
+        pdf_media_id: str | None = None,
+    ) -> HealthReport:
+        voucher_no = await self._ensure_unique_voucher_no(user_id, voucher_no)
+        payload: dict[str, Any] = dict(extra_payload or {})
+        if full_text:
+            payload["full_text"] = full_text
+        row = HealthReport(
+            id=new_uuid(),
+            user_id=user_id,
+            patient_name=patient_name.strip() or "未识别姓名",
+            exam_date=exam_date,
+            org_name=org_name.strip() or "未识别机构",
+            voucher_no=voucher_no,
+            report_type=(report_type or "体检报告").strip() or "体检报告",
+            pdf_media_id=pdf_media_id,
+            raw_payload=payload or None,
+        )
+        for item in findings or []:
+            row.findings.append(
+                HealthReportFinding(
+                    id=new_uuid(),
+                    title=item.title.strip() or "异常项",
+                    suggestion=item.suggestion.strip() or "建议结合纸质报告或到医院复查",
+                    risk_level=item.risk_level,
+                    sort_order=item.sort_order,
+                )
+            )
+        self.session.add(row)
+        await self.session.flush()
+        return row
 
     def _summary_out(self, row: HealthSummary) -> HealthSummaryOut:
         items = [

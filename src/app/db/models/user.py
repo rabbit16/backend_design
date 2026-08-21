@@ -16,15 +16,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
-from app.utils.ids import new_uuid
+from src.app.db.base import Base, CreatedAtMixin, SoftDeleteMixin, TimestampMixin
+from src.app.utils.ids import new_uuid
 
 if TYPE_CHECKING:
-    from app.db.models.archive import ArchiveExport, ArchiveOcrJob, ArchiveShare, MedicalArchive
-    from app.db.models.family import FamilyContact, FamilyPushRule
-    from app.db.models.health import HealthReport, HealthSummary
-    from app.db.models.media import MediaFile
-    from app.db.models.qa import QaMessage, QaRecommendation, QaSession, VoiceRecognizeJob
+    from src.app.db.models.archive import ArchiveExport, ArchiveOcrJob, ArchiveShare, MedicalArchive
+    from src.app.db.models.family import FamilyContact, FamilyPushRule
+    from src.app.db.models.health import HealthReport, HealthSummary
+    from src.app.db.models.media import MediaFile
+    from src.app.db.models.qa import QaMessage, QaRecommendation, QaSession, VoiceRecognizeJob
 
 
 class User(TimestampMixin, SoftDeleteMixin, Base):

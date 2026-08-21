@@ -81,7 +81,7 @@ DATABASE_URL=mysql+aiomysql://user:password@localhost:3306/senior_voice?charset=
 迁移：
 
 ```bash
-PYTHONPATH=src python scripts/db_migrate.py upgrade
+PYTHONPATH=. python scripts/db_migrate.py upgrade
 ```
 
 ## 修改建议

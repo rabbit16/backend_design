@@ -3,8 +3,10 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_session
-from app.schemas.archive import (
+from src.app.db.session import get_session
+from src.app.gateways.base import AIGateway
+from src.app.gateways.registry import get_gateway
+from src.app.schemas.archive import (
     ArchiveListResponse,
     ArchiveRecord,
     CreateArchiveRequest,
@@ -15,14 +17,17 @@ from app.schemas.archive import (
     ShareArchiveResponse,
     UpdateArchiveRequest,
 )
-from app.security.jwt import get_current_subject
-from app.services.archive_service import ArchiveService
+from src.app.security.jwt import get_current_subject
+from src.app.services.archive_service import ArchiveService
 
 router = APIRouter(prefix="/archives", tags=["archives"])
 
 
-def _service(session: Annotated[AsyncSession, Depends(get_session)]) -> ArchiveService:
-    return ArchiveService(session)
+def _service(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    gateway: Annotated[AIGateway, Depends(get_gateway)],
+) -> ArchiveService:
+    return ArchiveService(session, gateway=gateway, owns_gateway=False)
 
 
 @router.post("/ocr", response_model=OcrResult)
