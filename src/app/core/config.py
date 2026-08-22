@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # 适老化问答：服务端托管上下文；创建时固定 30 天过期，期内提问不续期
     qa_context_ttl_seconds: int = 30 * 24 * 60 * 60
     qa_context_history_limit: int = 40
+    # 首页问询：症状追问轮次上限（含首轮）；达到后强制给出初步判断
+    qa_max_followup_turns: int = 6
+    qa_prompt_name: str = "qa_symptom_intake"
 
     rate_limit_enabled: bool = True
     rate_limit_requests: int = 120

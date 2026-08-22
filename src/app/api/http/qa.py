@@ -53,9 +53,10 @@ async def ask_text(
     service: Annotated[QaService, Depends(_qa_service)],
     user_id: Annotated[str, Depends(get_current_subject)],
 ) -> StreamingResponse:
-    """适老化文字问答（SSE 流式，OpenAI SDK）。
+    """适老化文字问答（SSE 流式，症状追问至初步判断）。
 
-    事件：meta → token* → done | error
+    事件：meta → (phase|token)* → done | error
+    phase: followup（继续追问）/ diagnosis（初步判断）/ emergency（需急救）
     """
     return _sse(
         service.ask_text_stream(
@@ -79,7 +80,7 @@ async def ask_audio_multipart(
 ) -> StreamingResponse:
     """语音输入 → 文本流式输出（multipart 上传音频）。
 
-    内部按 OpenAI `input_audio` + `modalities=["text"]` 调用音频模型。
+    与文字问询相同：症状不清楚会追问，清楚后给出初步判断。
     """
     data = await file.read()
     fmt: AudioFormat

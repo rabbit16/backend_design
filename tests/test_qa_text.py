@@ -68,10 +68,12 @@ def test_text_ask_auto_context() -> None:
         first = _ask(client, headers, "今天天气怎么样")
         body1 = first["done"]
         assert first["meta"]["context_continued"] is False
+        assert first["meta"]["intake_round"] == 1
         assert body1["context_continued"] is False
         assert body1["context_id"]
         assert body1["question_text"] == "今天天气怎么样"
         assert body1["answer_text"]
+        assert body1["phase"] in {"followup", "diagnosis", "emergency"}
         assert body1["turn_index_user"] == 1
         assert body1["turn_index_assistant"] == 2
 
@@ -149,5 +151,84 @@ def test_sse_token_order() -> None:
         assert types[0] == "meta"
         assert types[-1] == "done"
         assert "token" in types
+        assert "phase" in types
         deltas = "".join(e["delta"] for e in result["events"] if e["type"] == "token")
         assert deltas == result["done"]["answer_text"]
+
+
+def test_text_ask_followup_phase_not_leaked_to_user() -> None:
+    from src.app.schemas.openai_chat import (
+        ChatCompletionChunk,
+        ChatCompletionChunkChoice,
+        ChatCompletionChunkDelta,
+        ChatCompletionRequest,
+    )
+
+    class _ScriptedGateway:
+        provider = "scripted"
+
+        async def chat_completions_stream(self, request: ChatCompletionRequest):
+            yield ChatCompletionChunk(
+                choices=[
+                    ChatCompletionChunkChoice(
+                        delta=ChatCompletionChunkDelta(content="FOLLOWUP\n\n您头疼几天了？")
+                    )
+                ]
+            )
+
+        async def close(self) -> None:
+            return None
+
+    clear_sms_store()
+    clear_revoked_sessions()
+    clear_context_store()
+    app = create_app()
+    with TestClient(app) as client:
+        app.state.ai_gateway = _ScriptedGateway()
+        headers = _auth_headers(client, "13100131007")
+        result = _ask(client, headers, "我有点头疼")
+        assert result["done"]["phase"] == "followup"
+        assert result["done"]["intake_complete"] is False
+        assert result["done"]["answer_text"] == "您头疼几天了？"
+        assert "FOLLOWUP" not in result["done"]["answer_text"]
+        deltas = "".join(e["delta"] for e in result["events"] if e["type"] == "token")
+        assert deltas == "您头疼几天了？"
+
+
+def test_text_ask_diagnosis_phase() -> None:
+    from src.app.schemas.openai_chat import (
+        ChatCompletionChunk,
+        ChatCompletionChunkChoice,
+        ChatCompletionChunkDelta,
+        ChatCompletionRequest,
+    )
+
+    class _ScriptedGateway:
+        provider = "scripted"
+
+        async def chat_completions_stream(self, request: ChatCompletionRequest):
+            yield ChatCompletionChunk(
+                choices=[
+                    ChatCompletionChunkChoice(
+                        delta=ChatCompletionChunkDelta(
+                            content="DIAGNOSIS\n\n更像是着凉引起的头疼，先休息观察。这不是医生诊断。"
+                        )
+                    )
+                ]
+            )
+
+        async def close(self) -> None:
+            return None
+
+    clear_sms_store()
+    clear_revoked_sessions()
+    clear_context_store()
+    app = create_app()
+    with TestClient(app) as client:
+        app.state.ai_gateway = _ScriptedGateway()
+        headers = _auth_headers(client, "13100131008")
+        result = _ask(client, headers, "头疼三天了，不发烧")
+        assert result["done"]["phase"] == "diagnosis"
+        assert result["done"]["intake_complete"] is True
+        assert "着凉" in result["done"]["answer_text"]
+

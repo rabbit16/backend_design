@@ -88,6 +88,7 @@ def test_ask_audio_multipart_sse() -> None:
     done = next(e for e in events if e["type"] == "done")
     assert done["input_mode"] == "voice"
     assert done["answer_text"]
+    assert done["phase"] in {"followup", "diagnosis", "emergency"}
 
 
 def test_ask_audio_json_sse() -> None:

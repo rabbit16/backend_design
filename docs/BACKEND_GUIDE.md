@@ -190,6 +190,8 @@ cp .env.example .env
 | `REDIS_ENABLED` | 是否启用 Redis | `false`（问答上下文可回退内存） |
 | `QA_CONTEXT_TTL_SECONDS` | 问答上下文固定 TTL（秒，创建时写入，提问不续期） | `2592000`（30 天） |
 | `QA_CONTEXT_HISTORY_LIMIT` | 拼进模型的历史消息条数上限 | `40` |
+| `QA_MAX_FOLLOWUP_TURNS` | 首页问询最多几轮用户陈述（含首轮），达到后强制初步判断 | `6` |
+| `QA_PROMPT_NAME` | 问询 prompt 名（对应 `prompts/templates/*.json`） | `qa_symptom_intake` |
 | `JWT_SECRET_KEY` | JWT 密钥（生产务必改长密钥） | 见 `.env` |
 | `JWT_ACCESS_TOKEN_EXPIRE_MINUTES` | access 有效分钟 | `120`（即 expires_in=7200） |
 | `SMS_DEV_CODE` | 本地固定验证码；生产置空并接短信通道 | `123456` |
@@ -206,7 +208,8 @@ cp .env.example .env
 ### 4.2.1 切换大模型（OpenAI 协议）
 
 业务统一走 OpenAI Python SDK（`AsyncOpenAI.chat.completions`）：文本 `messages[]`，语音为 `input_audio` + `modalities=["text"]` 流式文本。  
-适老化问答 `/qa/ask`、`/qa/ask/audio` 会把历史轮次拼进 messages，再调网关。
+适老化问答 `/qa/ask`、`/qa/ask/audio` 会把历史轮次拼进 messages，再调网关。  
+首页问询默认是**症状追问**：模型先问清不舒服，认为说清楚后再给出初步判断（SSE 的 `phase` 为 `followup` / `diagnosis` / `emergency`）。
 
 本地默认走真实 LLM（需 Key）：
 

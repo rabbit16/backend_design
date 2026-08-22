@@ -25,14 +25,16 @@ from src.app.schemas.openai_chat import (
 )
 from src.app.schemas.qa import TextAskResponse
 from src.app.services.context_store import QaContextStore
+from src.app.services.qa_intake import (
+    IntakeReply,
+    count_user_turns,
+    history_chat_messages,
+    iterate_intake_stream,
+    render_intake_prompts,
+)
 from src.app.utils.ids import new_uuid
 
-SENIOR_SYSTEM_PROMPT = (
-    "你是适老化语音问答助手。请用简短、清楚、口语化的中文回答老人的问题，"
-    "避免生僻词和过长段落；涉及医疗时提醒仅供参考、不能替代医生诊断。"
-)
-
-DEFAULT_AUDIO_PROMPT = "请用简短、清楚、口语化的中文回答录音里的问题。"
+DEFAULT_AUDIO_PROMPT = "请听录音里老人说的话，按问诊规则继续追问或给出初步判断。"
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 
@@ -47,18 +49,6 @@ def _fmt_utc(dt: datetime) -> str:
 def _truncate_title(question: str, limit: int = 40) -> str:
     text = question.strip().replace("\n", " ")
     return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def _history_messages(history: list[QaMessage]) -> list[ChatMessage]:
-    settings = get_settings()
-    recent = history[-settings.qa_context_history_limit :]
-    messages: list[ChatMessage] = [ChatMessage(role="system", content=SENIOR_SYSTEM_PROMPT)]
-    for msg in recent:
-        if msg.role == "user":
-            messages.append(ChatMessage(role="user", content=msg.content))
-        elif msg.role == "assistant":
-            messages.append(ChatMessage(role="assistant", content=msg.content))
-    return messages
 
 
 class QaService:
@@ -139,11 +129,16 @@ class QaService:
         question: str,
         user_id: str,
         *,
+        lang: str,
         stream: bool,
     ) -> ChatCompletionRequest:
         settings = get_settings()
-        messages = _history_messages(history)
-        messages.append(ChatMessage(role="user", content=question))
+        user_turn = count_user_turns(history) + 1
+        system_prompt, user_prompt = render_intake_prompts(
+            question=question, user_turn=user_turn, lang=lang
+        )
+        messages = history_chat_messages(history, system_prompt)
+        messages.append(ChatMessage(role="user", content=user_prompt))
         return ChatCompletionRequest(
             model=settings.openai_model,
             messages=messages,
@@ -161,10 +156,17 @@ class QaService:
         audio_format: AudioFormat,
         prompt: str,
         user_id: str,
+        lang: str,
         stream: bool,
     ) -> ChatCompletionRequest:
         settings = get_settings()
-        messages = _history_messages(history)
+        user_turn = count_user_turns(history) + 1
+        system_prompt, _ = render_intake_prompts(
+            question=prompt or DEFAULT_AUDIO_PROMPT,
+            user_turn=user_turn,
+            lang=lang,
+        )
+        messages = history_chat_messages(history, system_prompt)
         messages.append(
             ChatMessage(
                 role="user",
@@ -187,6 +189,64 @@ class QaService:
             user=user_id,
         )
 
+    def _intake_meta(
+        self,
+        qa: QaSession,
+        *,
+        question_text: str,
+        continued: bool,
+        next_turn: int,
+        input_mode: str,
+        intake_round: int,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "type": "meta",
+            "context_id": qa.id,
+            "lang": qa.lang,
+            "question_text": question_text,
+            "context_continued": continued,
+            "turn_index_user": next_turn,
+            "turn_index_assistant": next_turn + 1,
+            "input_mode": input_mode,
+            "intake_round": intake_round,
+        }
+        if extra:
+            payload.update(extra)
+        return payload
+
+    def _intake_done(
+        self,
+        qa_row: QaSession,
+        *,
+        question: str,
+        answer: str,
+        user_msg: QaMessage,
+        assistant_msg: QaMessage,
+        continued: bool,
+        input_mode: str,
+        reply: IntakeReply,
+        now: datetime,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "type": "done",
+            "context_id": qa_row.id,
+            "lang": qa_row.lang,
+            "question_text": question,
+            "answer_text": answer,
+            "turn_index_user": user_msg.turn_index,
+            "turn_index_assistant": assistant_msg.turn_index,
+            "context_continued": continued,
+            "input_mode": input_mode,
+            "phase": reply.phase,
+            "intake_complete": reply.intake_complete,
+            "created_at": _fmt_utc(now),
+        }
+        if extra:
+            payload.update(extra)
+        return payload
+
     async def ask_text_stream(
         self,
         user_id: str,
@@ -195,7 +255,7 @@ class QaService:
         *,
         new_context: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
-        """文字问答 SSE：meta → token* → done。"""
+        """文字问询 SSE：meta → (phase|token)* → done。症状不清会追问。"""
         question = question.strip()
         if not question:
             raise AppError("问题不能为空", code="empty_question", status_code=400)
@@ -205,44 +265,31 @@ class QaService:
             user_id, question, lang, new_context=new_context
         )
         await self.session.commit()
-        req = self._build_text_request(history, question, user_id, stream=True)
+        req = self._build_text_request(
+            history, question, user_id, lang=lang, stream=True
+        )
 
-        yield {
-            "type": "meta",
-            "context_id": qa.id,
-            "lang": qa.lang,
-            "question_text": question,
-            "context_continued": continued,
-            "turn_index_user": next_turn,
-            "turn_index_assistant": next_turn + 1,
-            "input_mode": "text",
-        }
+        yield self._intake_meta(
+            qa,
+            question_text=question,
+            continued=continued,
+            next_turn=next_turn,
+            input_mode="text",
+            intake_round=count_user_turns(history) + 1,
+        )
 
         gateway = self.gateway or create_gateway()
         owns = self.owns_gateway or self.gateway is None
-        chunks: list[str] = []
-        try:
-            async for chunk in gateway.chat_completions_stream(req):
-                delta = chunk.delta_content
-                if not delta:
-                    continue
-                chunks.append(delta)
-                yield {"type": "token", "delta": delta}
-        except AppError as exc:
-            yield {"type": "error", "code": exc.code, "message": exc.message}
+        reply: IntakeReply | None = None
+        async for event in iterate_intake_stream(gateway, req, owns_gateway=owns):
+            if event.get("type") == "_complete":
+                reply = event["reply"]
+                continue
+            yield event
+        if reply is None:
             return
-        except Exception as exc:  # noqa: BLE001
-            yield {
-                "type": "error",
-                "code": "qa_stream_failed",
-                "message": str(exc) or "生成回答失败",
-            }
-            return
-        finally:
-            if owns:
-                await gateway.close()
 
-        answer = "".join(chunks).strip() or "我暂时没有想好怎么回答，请您再说一遍。"
+        answer = reply.answer.strip() or "我暂时没有想好怎么回答，请您再说一遍。"
         now = datetime.now(UTC)
         user_msg = QaMessage(
             id=new_uuid(),
@@ -271,18 +318,17 @@ class QaService:
             qa_row.title = _truncate_title(question)
         await self.session.commit()
 
-        yield {
-            "type": "done",
-            "context_id": qa_row.id,
-            "lang": qa_row.lang,
-            "question_text": question,
-            "answer_text": answer,
-            "turn_index_user": user_msg.turn_index,
-            "turn_index_assistant": assistant_msg.turn_index,
-            "context_continued": continued,
-            "input_mode": "text",
-            "created_at": _fmt_utc(now),
-        }
+        yield self._intake_done(
+            qa_row,
+            question=question,
+            answer=answer,
+            user_msg=user_msg,
+            assistant_msg=assistant_msg,
+            continued=continued,
+            input_mode="text",
+            reply=reply,
+            now=now,
+        )
 
     async def ask_audio_stream(
         self,
@@ -294,7 +340,7 @@ class QaService:
         lang: str = "zh",
         new_context: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
-        """语音输入 → 文本流式输出（OpenAI input_audio + modalities=text）。"""
+        """语音问询 SSE：与文字相同，按症状追问直至初步判断。"""
         if not audio_bytes:
             raise AppError("音频不能为空", code="empty_audio", status_code=400)
         if len(audio_bytes) > MAX_AUDIO_BYTES:
@@ -314,46 +360,32 @@ class QaService:
             audio_format=audio_format,
             prompt=prompt,
             user_id=user_id,
+            lang=lang,
             stream=True,
         )
 
-        yield {
-            "type": "meta",
-            "context_id": qa.id,
-            "lang": qa.lang,
-            "question_text": question_label,
-            "context_continued": continued,
-            "turn_index_user": next_turn,
-            "turn_index_assistant": next_turn + 1,
-            "input_mode": "voice",
-            "audio_format": audio_format,
-        }
+        yield self._intake_meta(
+            qa,
+            question_text=question_label,
+            continued=continued,
+            next_turn=next_turn,
+            input_mode="voice",
+            intake_round=count_user_turns(history) + 1,
+            extra={"audio_format": audio_format},
+        )
 
         gateway = self.gateway or create_gateway()
         owns = self.owns_gateway or self.gateway is None
-        chunks: list[str] = []
-        try:
-            async for chunk in gateway.chat_completions_stream(req):
-                delta = chunk.delta_content
-                if not delta:
-                    continue
-                chunks.append(delta)
-                yield {"type": "token", "delta": delta}
-        except AppError as exc:
-            yield {"type": "error", "code": exc.code, "message": exc.message}
+        reply: IntakeReply | None = None
+        async for event in iterate_intake_stream(gateway, req, owns_gateway=owns):
+            if event.get("type") == "_complete":
+                reply = event["reply"]
+                continue
+            yield event
+        if reply is None:
             return
-        except Exception as exc:  # noqa: BLE001
-            yield {
-                "type": "error",
-                "code": "qa_stream_failed",
-                "message": str(exc) or "生成回答失败",
-            }
-            return
-        finally:
-            if owns:
-                await gateway.close()
 
-        answer = "".join(chunks).strip() or "我暂时没有听清，请您再说一遍。"
+        answer = reply.answer.strip() or "我暂时没有听清，请您再说一遍。"
         now = datetime.now(UTC)
         user_msg = QaMessage(
             id=new_uuid(),
@@ -382,18 +414,17 @@ class QaService:
             qa_row.title = _truncate_title(question_label)
         await self.session.commit()
 
-        yield {
-            "type": "done",
-            "context_id": qa_row.id,
-            "lang": qa_row.lang,
-            "question_text": question_label,
-            "answer_text": answer,
-            "turn_index_user": user_msg.turn_index,
-            "turn_index_assistant": assistant_msg.turn_index,
-            "context_continued": continued,
-            "input_mode": "voice",
-            "created_at": _fmt_utc(now),
-        }
+        yield self._intake_done(
+            qa_row,
+            question=question_label,
+            answer=answer,
+            user_msg=user_msg,
+            assistant_msg=assistant_msg,
+            continued=continued,
+            input_mode="voice",
+            reply=reply,
+            now=now,
+        )
 
     async def ask_text(
         self,
@@ -425,6 +456,8 @@ class QaService:
             turn_index_user=done["turn_index_user"],
             turn_index_assistant=done["turn_index_assistant"],
             context_continued=done["context_continued"],
+            phase=done.get("phase", "followup"),
+            intake_complete=bool(done.get("intake_complete")),
             created_at=done["created_at"],
         )
 

@@ -9,7 +9,7 @@ Lang = Literal["zh", "en"]
 
 
 class TextAskRequest(BaseModel):
-    """适老化文字问答：无需传 session_id，服务端托管上下文。"""
+    """适老化文字问答：无需传 session_id，服务端托管上下文并按症状追问。"""
 
     question: str = Field(min_length=1, max_length=4000)
     lang: Lang = "zh"
@@ -23,7 +23,7 @@ class AudioAskJsonRequest(BaseModel):
     audio_base64: str = Field(min_length=1, description="base64 编码音频")
     audio_format: AudioFormat = "wav"
     prompt: str = Field(
-        default="请用简短、清楚、口语化的中文回答录音里的问题。",
+        default="请听录音里老人说的话，按问诊规则继续追问或给出初步判断。",
         max_length=2000,
     )
     lang: Lang = "zh"
@@ -39,6 +39,9 @@ class QaMessageOut(BaseModel):
     created_at: str
 
 
+QaPhase = Literal["followup", "diagnosis", "emergency"]
+
+
 class TextAskResponse(BaseModel):
     context_id: str
     lang: Lang
@@ -47,6 +50,8 @@ class TextAskResponse(BaseModel):
     turn_index_user: int
     turn_index_assistant: int
     context_continued: bool
+    phase: QaPhase = "followup"
+    intake_complete: bool = False
     created_at: str
 
 

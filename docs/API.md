@@ -221,6 +221,8 @@ Authorization: Bearer <access_token>
 服务端用 Redis（或本地内存回退）按用户缓存当前 `context_id`（即 `qa_sessions.id`）。  
 **固定 30 天过期**（自上下文创建起算）：期内继续提问**不会**刷新过期时间；到期后自动换新上下文。
 
+首页语音/文字问询会进入**症状追问**：模型先把不舒服问清楚（一次只问 1～2 个问题），认为信息足够后再给出**初步判断**（含「不能替代医生诊断」提醒）。危险信号会直接进入急救提示。同一上下文内继续说话即可多轮追问；点「新问题」传 `new_context=true`。
+
 #### `POST /qa/ask`（需登录）——文字输入（SSE 流式）
 
 `Content-Type: text/event-stream`
@@ -229,7 +231,7 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "question": "今天天气怎么样",
+  "question": "我有点头疼",
   "lang": "zh",
   "new_context": false
 }
@@ -243,38 +245,41 @@ Authorization: Bearer <access_token>
 
 事件顺序（每行 `data: {json}`，空行分隔）：
 
-1. **meta** — 上下文信息（先返回，便于 UI 绑定）
-2. **token** — 回答增量，可多次：`{"type":"token","delta":"..."}`
-3. **done** — 完整结果（已落库）
-4. 失败时 **error**：`{"type":"error","code":"...","message":"..."}`
+1. **meta** — 上下文信息（先返回，便于 UI 绑定），含 `intake_round`（当前是第几轮用户陈述）
+2. **phase** — `followup`（还要追问）/ `diagnosis`（已给出初步判断）/ `emergency`（需急救）
+3. **token** — 对老人说的话的增量，可多次：`{"type":"token","delta":"..."}`（不含阶段标记）
+4. **done** — 完整结果（已落库），含 `phase`、`intake_complete`
+5. 失败时 **error**：`{"type":"error","code":"...","message":"..."}`
+
+`phase` 可能出现在部分 token 之前或之后，前端以 `done.phase` 为准。`intake_complete=true` 表示本轮已给出初步判断或急救提示。
 
 示例：
 
 ```text
-data: {"type":"meta","context_id":"...","context_continued":false,"lang":"zh","question_text":"今天天气怎么样","turn_index_user":1,"turn_index_assistant":2}
+data: {"type":"meta","context_id":"...","context_continued":false,"lang":"zh","question_text":"我有点头疼","turn_index_user":1,"turn_index_assistant":2,"intake_round":1,"input_mode":"text"}
 
-data: {"type":"token","delta":"今天"}
+data: {"type":"phase","phase":"followup"}
 
-data: {"type":"token","delta":"晴朗"}
+data: {"type":"token","delta":"您头疼几天了？"}
 
-data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天气怎么样","answer_text":"今天晴朗","turn_index_user":1,"turn_index_assistant":2,"context_continued":false,"created_at":"2026-07-29T04:01:00Z"}
+data: {"type":"done","context_id":"...","lang":"zh","question_text":"我有点头疼","answer_text":"您头疼几天了？","phase":"followup","intake_complete":false,"turn_index_user":1,"turn_index_assistant":2,"context_continued":false,"created_at":"2026-07-29T04:01:00Z"}
 ```
 
-`context_continued=true` 表示沿用未过期的旧上下文（多轮追问）。
+`context_continued=true` 表示沿用未过期的旧上下文（多轮追问）。默认最多 6 轮用户陈述，达到上限后模型必须给出初步判断，可用环境变量 `QA_MAX_FOLLOWUP_TURNS` 调整。
 
 #### `POST /qa/ask/audio`（需登录）——语音输入 → 文本 SSE
 
-`multipart/form-data`，服务端用 OpenAI SDK 以 `input_audio` 调用音频模型，**只流式返回文本**（`modalities=["text"]`）。
+`multipart/form-data`，服务端用 OpenAI SDK 以 `input_audio` 调用音频模型，**只流式返回文本**（`modalities=["text"]`）。问诊规则与 `/qa/ask` 相同：先追问症状，清楚后再给初步判断。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `file` | file | wav / mp3 |
 | `lang` | string | `zh` \| `en` |
 | `new_context` | bool | 是否强制新上下文 |
-| `prompt` | string | 可选提示语（默认适老化口语提示） |
+| `prompt` | string | 可选提示语（默认引导模型听录音并按问诊规则作答） |
 | `audio_format` | string | 可选 `wav` \| `mp3`（不传则按文件名推断） |
 
-事件顺序同 `/qa/ask`（meta → token* → done）。
+事件顺序同 `/qa/ask`（meta → phase/token → done）。
 
 #### `POST /qa/ask/audio/json`（需登录）——base64 语音
 
@@ -282,7 +287,7 @@ data: {"type":"done","context_id":"...","lang":"zh","question_text":"今天天�
 {
   "audio_base64": "...",
   "audio_format": "wav",
-  "prompt": "请用简短口语化中文回答录音里的问题。",
+  "prompt": "请听录音里老人说的话，按问诊规则继续追问或给出初步判断。",
   "lang": "zh",
   "new_context": false
 }
@@ -855,8 +860,8 @@ docs/openapi.yaml                        # 已含 health-summaries / health-repo
 | 注册 | `POST /auth/sms/send`（purpose=register）、`POST /auth/register` |
 | 登录（验证码） | `POST /auth/sms/send`、`POST /auth/login/sms` |
 | 登录（密码） | `POST /auth/login/password` |
-| 首页文字输入 | `POST /qa/ask`（服务端 Redis 托管上下文，默认 30 天） |
-| 首页按住说话 | `POST /voice/recognize` → `POST /qa/ask`（识别文本后提问）或显式 `/qa/sessions` |
+| 首页文字输入 | `POST /qa/ask`（服务端托管上下文；模型追问症状至足够后给初步判断） |
+| 首页按住说话 | `POST /qa/ask/audio`（同样走症状追问；也可先 `POST /voice/recognize` 再 `/qa/ask`） |
 | 首页医疗推荐 | `POST /qa/sessions/{id}/recommendations` |
 | 结束当前对话 | `POST /qa/context/clear` |
 | 档案 OCR（拍照/相册） | **只调** `POST /archives/ocr`（`file`+`source`）。`visit`→就诊表，`exam`→体检表；用返回的 `id` 进详情。不要再 `POST /archives` |
